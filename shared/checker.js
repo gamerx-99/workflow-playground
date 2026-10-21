@@ -24,7 +24,8 @@ function checkFlow(level, flow, catalog) {
   const connections = (flow && flow.connections) || [];
   const ctx = { nodes, connections, catalog };
 
-  const items = (level.checks || []).map(check => {
+  const checks = level.checks || deriveChecks(level, catalog);
+  const items = checks.map(check => {
     const runner = CHECK_RUNNERS[check.type];
     if (!runner) return { ok: false, label: `ไม่รู้จักชนิดการตรวจ "${check.type}"`, detail: '' };
     const res = runner(check, ctx);
@@ -33,6 +34,63 @@ function checkFlow(level, flow, catalog) {
 
   const score = items.filter(i => i.ok).length;
   return { passed: items.length > 0 && score === items.length, score, total: items.length, items };
+}
+
+// ---------------------------------------------------------
+// สร้าง checks อัตโนมัติจากเฉลย (level.template) — ใช้เมื่อด่านไม่ได้เขียน checks เอง
+//   - ต้องมีบล็อกครบชนิด/จำนวนตามเฉลย
+//   - ต้องต่อสายครบทุกคู่ชนิดบล็อก (และพอร์ต เมื่อบล็อกต้นทางมีหลายพอร์ต)
+//   - ช่องข้อความที่เฉลยใช้ {{ตัวแปร}} ต้องมีตัวแปรเหล่านั้น (ถ้ามีบล็อกชนิดเดียวกันหลายตัว ต้องมีครบทุกตัว)
+//   - ช่องที่เป็นตัวตัดสิน (operator / rightValue / operation) ต้องตรงเฉลย
+//   - ชีตหลายตัวต้องตั้งชื่อไม่ซ้ำกัน
+//   - level.extraChecks เพิ่มข้อตรวจเองได้ และมีกฎกลาง reachable + upstreamVars เสมอ
+// ---------------------------------------------------------
+const DECISIVE_FIELDS = { logic_if: ['operator', 'rightValue'], action_sheets: ['operation'] };
+
+function deriveChecks(level, catalog) {
+  const tpl = level.template;
+  if (!tpl) return [];
+  const checks = [];
+  const byType = {};
+  tpl.nodes.forEach(n => (byType[n.type] = byType[n.type] || []).push(n));
+
+  Object.entries(byType).forEach(([type, list]) => checks.push({ type: 'block', block: type, min: list.length }));
+
+  const seenLinks = new Set();
+  tpl.connections.forEach(c => {
+    const from = tpl.nodes.find(n => n.id === c.fromNode);
+    const to = tpl.nodes.find(n => n.id === c.toNode);
+    const def = catalog.find(b => b.type === from.type);
+    const port = def.outputs.length > 1 ? c.fromPort : undefined;
+    const key = `${from.type}|${port}|${to.type}`;
+    if (seenLinks.has(key)) return;
+    seenLinks.add(key);
+    checks.push({ type: 'link', from: from.type, port, to: to.type });
+  });
+
+  Object.entries(byType).forEach(([type, list]) => {
+    if (type.startsWith('trigger_')) return;
+    const def = catalog.find(b => b.type === type);
+    def.fields.filter(f => f.type !== 'select').forEach(f => {
+      const sets = list.map(n => new Set(varsIn(n.config && n.config[f.key])));
+      const common = [...sets[0]].filter(v => sets.every(s => s.has(v)));
+      if (common.length) checks.push({ type: 'vars', block: type, field: f.key, vars: common, all: list.length > 1 });
+    });
+    (DECISIVE_FIELDS[type] || []).forEach(key => {
+      const values = list.map(n => String((n.config && n.config[key]) || '').trim());
+      if (values.every(v => v === values[0]) && values[0] !== '') {
+        checks.push({ type: 'value', block: type, field: key, oneOf: [values[0]] });
+      }
+    });
+  });
+
+  const sheets = byType.action_sheets || [];
+  const sheetNames = sheets.map(n => String((n.config && n.config.sheetName) || '').trim());
+  if (sheets.length > 1 && new Set(sheetNames).size === sheetNames.length) {
+    checks.push({ type: 'distinct', block: 'action_sheets', field: 'sheetName' });
+  }
+
+  return [...checks, ...(level.extraChecks || []), { type: 'reachable' }, { type: 'upstreamVars' }];
 }
 
 // ---------- helpers ----------
@@ -116,13 +174,15 @@ const CHECK_RUNNERS = {
     const label = `บล็อก [${title}] ช่อง "${check.field}" ใช้ตัวแปร ${check.vars.join(', ')}`;
     if (candidates.length === 0) return { ok: false, label, detail: 'ยังไม่มีบล็อกนี้บนกระดาน' };
 
-    const best = candidates
+    const evaluated = candidates
       .map(n => ({ node: n, missing: check.vars.filter(v => !varsIn(n.config && n.config[check.field]).includes(v)) }))
-      .sort((a, b) => a.missing.length - b.missing.length)[0];
+      .sort((a, b) => a.missing.length - b.missing.length);
+    // all = บล็อกชนิดนี้ทุกตัวต้องมีตัวแปรครบ, ไม่เช่นนั้นขอแค่ตัวใดตัวหนึ่ง
+    const worst = check.all ? evaluated[evaluated.length - 1] : evaluated[0];
     return {
-      ok: best.missing.length === 0,
-      label,
-      detail: best.missing.length === 0 ? 'ใส่ตัวแปรครบแล้ว' : `ยังขาด ${best.missing.join(', ')} (บล็อก #${best.node.id})`
+      ok: worst.missing.length === 0,
+      label: check.all ? `${label} (ทุกบล็อก)` : label,
+      detail: worst.missing.length === 0 ? 'ใส่ตัวแปรครบแล้ว' : `ยังขาด ${worst.missing.join(', ')} (บล็อก #${worst.node.id})`
     };
   },
 
@@ -132,7 +192,9 @@ const CHECK_RUNNERS = {
     const label = `บล็อก [${title}] ช่อง "${check.field}" เป็น ${check.oneOf.map(v => `"${v}"`).join(' หรือ ')}`;
     if (candidates.length === 0) return { ok: false, label, detail: 'ยังไม่มีบล็อกนี้บนกระดาน' };
 
-    const hit = candidates.find(n => check.oneOf.includes(String((n.config && n.config[check.field]) || '').trim()));
+    // ตัวเลขเทียบแบบไม่สนลูกน้ำ (1,000 = 1000)
+    const norm = s => String(s == null ? '' : s).trim().replace(/^(\d[\d,]*)$/, m => m.replace(/,/g, ''));
+    const hit = candidates.find(n => check.oneOf.map(norm).includes(norm(n.config && n.config[check.field])));
     const current = candidates.map(n => `#${n.id}: "${(n.config && n.config[check.field]) || ''}"`).join(', ');
     return { ok: !!hit, label, detail: hit ? 'ตั้งค่าถูกต้อง' : `ค่าปัจจุบัน ${current}` };
   },
@@ -193,6 +255,14 @@ const CHECK_RUNNERS = {
   }
 };
 
+// คำใบ้ของด่าน: ใช้ level.hint ถ้ามี ไม่เช่นนั้นสร้างจากรายการข้อตรวจ (ตัวบอกว่าต้องมี/ต้องต่ออะไรบ้าง)
+function levelHint(level, catalog) {
+  if (level.hint) return level.hint;
+  if (level.mode === 'predict') return '💡 ไล่ตามเส้นเชื่อมจาก Trigger ทีละบล็อก แล้วเช็คเงื่อนไขของแต่ละบล็อกกับข้อมูลตัวอย่าง';
+  const labels = checkFlow(level, { nodes: [], connections: [] }, catalog).items.map(i => i.label);
+  return `💡 <b>โพยด่านนี้ (สิ่งที่ต้องทำให้ครบ):</b><br>${labels.map((l, i) => `${i + 1}. ${l}`).join('<br>')}`;
+}
+
 // ---------------------------------------------------------
 // ด่านทายผล (mode: 'predict')
 // คำตอบที่ถูกคำนวณจาก simulateFlow(level.start) แล้วเทียบกับ outcome ของแต่ละตัวเลือก
@@ -226,4 +296,4 @@ function checkPrediction(level, answers, catalog) {
   return { passed: items.length > 0 && score === items.length, score, total: items.length, items };
 }
 
-if (typeof module !== 'undefined') module.exports = { checkFlow, checkPrediction, correctOptionIndex, CHECK_RUNNERS };
+if (typeof module !== 'undefined') module.exports = { checkFlow, checkPrediction, correctOptionIndex, deriveChecks, levelHint, CHECK_RUNNERS };

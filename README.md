@@ -6,8 +6,10 @@
 shared/                 ข้อมูล + ตรรกะที่ไม่แตะหน้าเว็บ (ใช้ซ้ำฝั่ง backend ได้ด้วย require())
   variables.js          คำอธิบายตัวแปร {{...}}
   blocks.js             BLOCK_CATALOG — ชนิดบล็อกทั้งหมด
-  levels.js             LEVELS — โจทย์แต่ละด่าน + checks (เงื่อนไขผ่านด่าน)
-  checker.js            checkFlow(level, flow, catalog) — ระบบตรวจคำตอบ
+  levels.js             รวมด่านทั้งหมดเป็น LEVELS + TRACKS (5 สาย, 30 ด่าน)
+  levels/               ไฟล์ด่านแยกตามสาย: core, basics, conditions, data, ai, cases (+ _helpers.js)
+  checker.js            checkFlow / deriveChecks / checkPrediction — ระบบตรวจคำตอบ
+  simulator.js          simulateFlow — จำลองการทำงานของ flow (ปุ่ม ▶)
 frontend/
   index.html            หน้าใช้งาน
   css/app.css
@@ -29,7 +31,10 @@ python -m http.server 5173
 
 ## เพิ่มด่านใหม่
 
-เพิ่ม object ใน `shared/levels.js` พร้อม `checks` — ชนิด check ที่ใช้ได้อธิบายไว้หัวไฟล์ `shared/checker.js`
+1. เพิ่ม object ด่านในไฟล์ของสายที่เกี่ยวข้อง `shared/levels/<สาย>.js` (ใช้ `node(...)` / `link(...)` ช่วยวางบล็อกและต่อสาย ดูตัวอย่างใน `basics.js`) ใส่ `template` (เฉลย) — ระบบจะ**สร้าง checks จากเฉลยให้เอง** ถ้าต้องการข้อตรวจเพิ่มใส่ `extraChecks` หรือเขียน `checks` ทั้งหมดเอง (ชนิด check ดูหัวไฟล์ `shared/checker.js`)
+2. เพิ่ม id ของด่านใน `TRACKS` ที่ `shared/levels.js`
+3. เพิ่ม `<script>` ของไฟล์ใหม่ (ถ้าสร้างไฟล์สายใหม่) ใน `frontend/index.html`
+4. รัน `node tests/levels.test.js` — ต้องผ่านทั้งหมด (เฉลยต้องผ่าน, โจทย์เริ่มต้นต้องไม่ผ่าน, เฉลยรันจำลองแล้วไม่มีคำเตือน)
 
 ## AI Coach (ทางเลือก) — ใช้ Google Antigravity SDK
 

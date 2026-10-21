@@ -43,7 +43,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   passedLevelIds = (await Api.getProgress()).passed;
   renderLevelTabs();
   renderPalette();
-  loadLevelState(2); // เปิดมาที่ด่าน 2 หรือด่านที่กำลังทำต่อได้เลย
+  // เปิดมาที่ด่านแรกที่ยังไม่ผ่าน (ตามลำดับสาย) — ถ้าผ่านหมดแล้วเริ่มที่ด่านแรก
+  const resumeId = TRACKS.flatMap(t => t.levelIds).find(id => !passedLevelIds.includes(id));
+  loadLevelState(resumeId !== undefined ? resumeId : 1);
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && activeWire) cancelWiring();
@@ -82,7 +84,7 @@ async function loadLevelState(levelId) {
   document.getElementById('level-badge').textContent = levelObj.badge;
   document.getElementById('mission-title').textContent = levelObj.title;
   document.getElementById('mission-desc').textContent = levelObj.desc;
-  document.getElementById('hint-content').innerHTML = levelObj.hint;
+  document.getElementById('hint-content').innerHTML = levelHint(levelObj, BLOCK_CATALOG);
   document.getElementById('hint-banner').classList.add('hidden');
 
   renderLevelTabs();
@@ -101,20 +103,80 @@ async function loadLevelState(levelId) {
   renderInspector();
 }
 
+// ด่านถัดไป/ก่อนหน้าตามลำดับในสาย (ข้ามสายเมื่อถึงปลายสาย)
+function adjacentLevelId(step) {
+  const order = TRACKS.flatMap(t => t.levelIds);
+  const next = order[order.indexOf(currentLevelId) + step];
+  return next === undefined ? null : next;
+}
+
 function renderLevelTabs() {
   const container = document.getElementById('level-tabs');
-  container.innerHTML = LEVELS.map(lvl => {
-    const active = lvl.id === currentLevelId;
-    const passed = passedLevelIds.includes(lvl.id);
+  const level = LEVELS.find(l => l.id === currentLevelId);
+  const prev = adjacentLevelId(-1);
+  const next = adjacentLevelId(1);
+  const navBtn = (id, label) => `
+    <button ${id === null ? 'disabled' : `onclick="loadLevelState(${id})"`}
+      class="w-7 h-7 rounded-lg text-xs ${id === null ? 'text-slate-700' : 'text-slate-300 hover:bg-slate-800 cursor-pointer'}">${label}</button>`;
+
+  container.innerHTML = `
+    ${navBtn(prev, '◀')}
+    <button onclick="openLevelPicker()" title="เลือกด่าน"
+      class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow shadow-indigo-500/30 cursor-pointer max-w-[260px] truncate">
+      ${passedLevelIds.includes(level.id) ? '✅ ' : ''}${escapeHtml(level.shortName)} ▾
+    </button>
+    ${navBtn(next, '▶')}
+    <span class="text-[10px] text-slate-500 px-1.5 hidden md:inline">ผ่านแล้ว ${passedLevelIds.length}/${LEVELS.length}</span>`;
+}
+
+const DIFFICULTY_STARS = { 1: '★☆☆', 2: '★★☆', 3: '★★★' };
+
+// หน้าต่างเลือกด่าน แบ่งตามสาย (ปลดล็อกแบบแนะนำ: ด่านที่ยังไม่ถึงลำดับขึ้น 🔒 แต่ยังกดเข้าได้)
+function openLevelPicker() {
+  const body = document.getElementById('level-picker-body');
+  body.innerHTML = TRACKS.map(track => {
+    const levels = track.levelIds.map(id => LEVELS.find(l => l.id === id));
+    const done = levels.filter(l => passedLevelIds.includes(l.id)).length;
+    const firstOpen = levels.findIndex(l => !passedLevelIds.includes(l.id));
     return `
-      <button onclick="loadLevelState(${lvl.id})"
-        class="px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-          active
-            ? 'bg-indigo-600 text-white shadow shadow-indigo-500/30'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-        }">
-        ${passed ? '✅ ' : ''}${lvl.shortName}
-      </button>
-    `;
+      <section class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-sm text-white">${track.icon} ${escapeHtml(track.name)}</h3>
+          <span class="text-[11px] text-slate-400">${done}/${levels.length} ด่าน</span>
+        </div>
+        <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${Math.round(done / levels.length * 100)}%"></div></div>
+        <p class="text-[11px] text-slate-500">${escapeHtml(track.desc)}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${levels.map((l, i) => {
+            const passed = passedLevelIds.includes(l.id);
+            const recommended = i === firstOpen;
+            const locked = !passed && firstOpen !== -1 && i > firstOpen;
+            return `
+              <button onclick="pickLevel(${l.id})"
+                class="text-left p-2.5 rounded-xl border cursor-pointer transition ${
+                  l.id === currentLevelId ? 'border-indigo-400 bg-indigo-950/40'
+                  : passed ? 'border-emerald-500/30 bg-emerald-950/20 hover:border-emerald-400'
+                  : recommended ? 'border-amber-400/60 bg-amber-950/20 hover:border-amber-300'
+                  : 'border-slate-800 bg-slate-950 hover:border-slate-600'} ${locked ? 'opacity-60' : ''}">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-semibold text-white truncate">${passed ? '✅' : locked ? '🔒' : recommended ? '👉' : '▫️'} ${escapeHtml(l.shortName)}</span>
+                  <span class="text-[10px] text-amber-300 shrink-0">${DIFFICULTY_STARS[l.difficulty]}</span>
+                </div>
+                <div class="text-[10px] text-indigo-300 mt-0.5">${MODE_LABELS[l.mode || 'build']}</div>
+                <div class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">${escapeHtml(l.title)}</div>
+              </button>`;
+          }).join('')}
+        </div>
+      </section>`;
   }).join('');
+  document.getElementById('level-picker-modal').classList.remove('hidden');
+}
+
+function closeLevelPicker() {
+  document.getElementById('level-picker-modal').classList.add('hidden');
+}
+
+function pickLevel(id) {
+  closeLevelPicker();
+  loadLevelState(id);
 }

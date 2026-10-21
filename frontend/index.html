@@ -271,6 +271,20 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: LEVEL PICKER ================= -->
+  <div id="level-picker-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div>
+          <h2 class="font-bold text-base text-white">📚 เลือกด่าน</h2>
+          <p class="text-xs text-slate-400">👉 = ด่านที่แนะนำให้ทำถัดไป • 🔒 = ควรทำด่านก่อนหน้าก่อน (แต่กดเข้าไปลองได้)</p>
+        </div>
+        <button onclick="closeLevelPicker()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+      <div id="level-picker-body" class="p-5 overflow-y-auto space-y-6"></div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: RUN SIMULATION ================= -->
   <div id="run-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
@@ -372,6 +386,13 @@
   <!-- shared: ข้อมูลและระบบตรวจที่ใช้ร่วมกับ backend ได้ -->
   <script src="../shared/variables.js"></script>
   <script src="../shared/blocks.js"></script>
+  <script src="../shared/levels/_helpers.js"></script>
+  <script src="../shared/levels/core.js"></script>
+  <script src="../shared/levels/basics.js"></script>
+  <script src="../shared/levels/conditions.js"></script>
+  <script src="../shared/levels/data.js"></script>
+  <script src="../shared/levels/ai.js"></script>
+  <script src="../shared/levels/cases.js"></script>
   <script src="../shared/levels.js"></script>
   <script src="../shared/simulator.js"></script>
   <script src="../shared/checker.js"></script>

@@ -2,9 +2,9 @@
 // ตรวจว่าด่านทุกด่านสอดคล้องกัน: เฉลยต้องผ่าน, โจทย์เริ่มต้นต้องไม่ผ่าน, ตัวจำลองต้องให้ผลตามที่คาด
 const assert = require('assert');
 const { BLOCK_CATALOG } = require('../shared/blocks.js');
-const { LEVELS } = require('../shared/levels.js');
-const { checkFlow, checkPrediction, correctOptionIndex } = require('../shared/checker.js');
-const { simulateFlow } = require('../shared/simulator.js');
+const { LEVELS, TRACKS } = require('../shared/levels.js');
+const { checkFlow, checkPrediction, correctOptionIndex, levelHint } = require('../shared/checker.js');
+const { simulateFlow, TRIGGER_SCENARIOS } = require('../shared/simulator.js');
 
 let failed = 0;
 function test(name, fn) {
@@ -18,6 +18,43 @@ function test(name, fn) {
 }
 
 const empty = { nodes: [], connections: [] };
+
+console.log('structure');
+const validTypes = new Set(BLOCK_CATALOG.map(b => b.type));
+test('id ไม่ซ้ำ และทุกด่านอยู่ในสายพอดี 1 สาย', () => {
+  const ids = LEVELS.map(l => l.id);
+  assert.strictEqual(new Set(ids).size, ids.length, 'มี id ซ้ำ');
+  const inTracks = TRACKS.flatMap(t => t.levelIds);
+  assert.strictEqual(new Set(inTracks).size, inTracks.length, 'มี id ซ้ำใน TRACKS');
+  assert.deepStrictEqual([...inTracks].sort((a, b) => a - b), [...ids].sort((a, b) => a - b));
+});
+test(`มีทั้งหมด ${LEVELS.length} ด่าน (ต้อง >= 30) และทุกสายมีอย่างน้อย 5 ด่าน`, () => {
+  assert.ok(LEVELS.length >= 30);
+  TRACKS.forEach(t => assert.ok(t.levelIds.length >= 5, `สาย ${t.name} มี ${t.levelIds.length} ด่าน`));
+});
+test('ทุกด่านมีข้อมูลครบ (ชื่อ โจทย์ ความยาก 1-3 และเฉลยหรือคำถาม)', () => {
+  LEVELS.forEach(l => {
+    ['shortName', 'badge', 'title', 'desc'].forEach(k => assert.ok(l[k], `ด่าน ${l.id} ไม่มี ${k}`));
+    assert.ok([1, 2, 3].includes(l.difficulty), `ด่าน ${l.id} difficulty ไม่ถูกต้อง`);
+    assert.ok(l.template || (l.mode === 'predict' && l.questions && l.start), `ด่าน ${l.id} ไม่มี template/questions`);
+  });
+});
+test('ทุกบล็อกในเฉลย/โจทย์เริ่มต้น เป็นชนิดที่มีอยู่จริง และเส้นเชื่อมอ้างบล็อก/พอร์ตที่มีจริง', () => {
+  LEVELS.forEach(l => [l.template, l.start].filter(Boolean).forEach(flow => {
+    const ids = new Set(flow.nodes.map(n => n.id));
+    assert.strictEqual(ids.size, flow.nodes.length, `ด่าน ${l.id} มี id บล็อกซ้ำ`);
+    flow.nodes.forEach(n => assert.ok(validTypes.has(n.type), `ด่าน ${l.id}: ไม่รู้จัก ${n.type}`));
+    flow.connections.forEach(c => {
+      assert.ok(ids.has(c.fromNode) && ids.has(c.toNode), `ด่าน ${l.id}: สายอ้างบล็อกที่ไม่มี`);
+      const from = flow.nodes.find(n => n.id === c.fromNode);
+      const def = BLOCK_CATALOG.find(b => b.type === from.type);
+      assert.ok(def.outputs.some(o => o.id === c.fromPort), `ด่าน ${l.id}: บล็อก #${from.id} ไม่มีพอร์ต ${c.fromPort}`);
+    });
+  }));
+});
+test('ทุกด่านมีคำใบ้ (levelHint) ไม่ว่าง', () => {
+  LEVELS.forEach(l => assert.ok(levelHint(l, BLOCK_CATALOG).length > 20, `ด่าน ${l.id}`));
+});
 
 console.log('levels');
 LEVELS.forEach(level => {
@@ -50,6 +87,21 @@ LEVELS.forEach(level => {
       assert.ok(!checkFlow(level, level.start, BLOCK_CATALOG).passed);
     });
   }
+});
+
+console.log('simulator vs level templates');
+LEVELS.filter(l => l.template && l.mode !== 'sandbox').forEach(level => {
+  test(`L${level.id} เฉลยรันจำลองแล้วไม่มีคำเตือนในขั้นตอนใดเลย (ทุกชุดข้อมูลตัวอย่าง)`, () => {
+    const triggerTypes = [...new Set(level.template.nodes.filter(n => n.type.startsWith('trigger_')).map(n => n.type))];
+    triggerTypes.forEach(type => {
+      TRIGGER_SCENARIOS[type].forEach(s => {
+        const r = simulateFlow(level.template, BLOCK_CATALOG, { scenarios: { [type]: s.id } });
+        const warned = r.steps.filter(st => st.warnings.length).map(st => `#${st.nodeId}: ${st.warnings[0]}`);
+        assert.deepStrictEqual(warned, [], `ชุด ${s.id}`);
+        assert.ok(r.steps.length >= 2, 'ไม่ทำงานเลย');
+      });
+    });
+  });
 });
 
 console.log('simulator');
