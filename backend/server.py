@@ -4,8 +4,8 @@
   .venv\\Scripts\\python.exe -m uvicorn server:app --host 127.0.0.1 --port 8787
 
 Endpoint:
-  GET  /health  -> { ok, ai, reason }   ai = true เมื่อล็อกอิน Google (ADC) และตั้ง project แล้ว
-                                        reason = no_login | no_project เมื่อ ai = false
+  GET  /health  -> { ok, ai, reason, provider }   ai = true เมื่อตั้ง API key (หรือ Google Login + project) แล้ว
+                                        reason = no_api_key | no_project เมื่อ ai = false
   POST /coach   -> CoachReply   (ดู coach.py)
 """
 
@@ -30,7 +30,7 @@ _coach_slots = asyncio.Semaphore(2)  # เรียกโมเดลพร้�
 
 async def health(request: Request) -> JSONResponse:
   problem = coach.auth_problem()
-  return JSONResponse({"ok": True, "ai": problem is None, "reason": problem})
+  return JSONResponse({"ok": True, "ai": problem is None, "reason": problem, "provider": coach.provider()})
 
 
 async def coach_endpoint(request: Request) -> JSONResponse:

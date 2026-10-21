@@ -92,8 +92,10 @@ function showCheckResult(result) {
 
 const COACH_FALLBACK_TEXT = {
   offline: 'ยังไม่ได้เปิด backend ของ AI Coach — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ (วิธีเปิดอยู่ใน README หัวข้อ AI Coach)',
-  no_login: 'เปิด backend แล้ว แต่ยังไม่ได้ล็อกอิน Google — รัน "gcloud auth application-default login" ใน Terminal แล้วลองใหม่ (ดูวิธีใน README หัวข้อ AI Coach) หรือใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
+  no_api_key: 'เปิด backend แล้ว แต่ยังไม่ได้ตั้ง THIRX_API_KEY ในไฟล์ .env — ดูวิธีใน README หัวข้อ AI Coach หรือใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
   no_project: 'ล็อกอิน Google แล้ว แต่ยังไม่ได้ตั้ง GOOGLE_CLOUD_PROJECT ใน backend/.env — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
+  auth_failed: 'API key ถูกปฏิเสธโดยผู้ให้บริการ AI (key ผิดหรือหมดอายุ) — ตรวจ THIRX_API_KEY ในไฟล์ .env แล้วเปิด backend ใหม่',
+  bad_base_url: 'THIRX_BASE_URL ต้องขึ้นต้นด้วย https:// (เพื่อไม่ให้ส่ง key แบบไม่เข้ารหัส) — แก้ในไฟล์ .env แล้วเปิด backend ใหม่',
   busy: 'โค้ชกำลังช่วยคนอื่นอยู่ ลองใหม่อีกครั้งในอีกสักครู่นะครับ',
   timeout: 'โค้ชใช้เวลานานเกินไป ลองใหม่อีกครั้งนะครับ',
   failed: 'โค้ชตอบไม่ได้ในตอนนี้ ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ'

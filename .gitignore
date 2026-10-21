@@ -44,3 +44,6 @@ desktop.ini
 backend/.venv/
 __pycache__/
 *.pyc
+
+# Local secrets
+test_thirx.py

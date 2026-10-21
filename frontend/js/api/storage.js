@@ -71,7 +71,7 @@ const LocalApi = {
   },
 
   // POST /coach (backend Python + Antigravity SDK) — คืน { ok, reply } หรือ { ok:false, reason }
-  // reason: offline | no_login | no_project | busy | timeout | failed
+  // reason: offline | no_api_key | no_project | auth_failed | bad_base_url | busy | timeout | failed
   async coach(levelId, flow, checkResult, attempt) {
     const level = LEVELS.find(l => l.id === levelId);
     const body = {
@@ -94,7 +94,7 @@ const LocalApi = {
       });
       if (res.ok) return { ok: true, reply: await res.json() };
       const err = (await res.json().catch(() => ({}))).error;
-      const known = ['no_login', 'no_project', 'busy', 'timeout'];
+      const known = ['no_api_key', 'no_project', 'auth_failed', 'bad_base_url', 'busy', 'timeout'];
       return { ok: false, reason: known.includes(err) ? err : 'failed' };
     } catch (e) {
       return { ok: false, reason: e.name === 'AbortError' ? 'timeout' : 'offline' };

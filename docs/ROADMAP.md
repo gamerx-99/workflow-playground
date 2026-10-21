@@ -93,8 +93,9 @@
 **5a — AI ด้วย Google Antigravity SDK** (backend Python ใน `backend/`)
 - [x] AI Coach: `POST /coach` ให้คำใบ้จาก flow + ผลตรวจ (ปุ่มในหน้าผลตรวจ, fallback เมื่อไม่มี backend/key)
 - [x] agent จำกัดสิทธิ์: มี tool `finish` อย่างเดียว, จำกัด token, ตรวจขนาดอินพุต
-- [x] ยืนยันตัวตนด้วย Google Login (Vertex AI Standard Mode / ADC) แทน API key — ตั้ง `GOOGLE_CLOUD_PROJECT` ใน `backend/.env` + `gcloud auth application-default login`
-- [ ] **ยังไม่ได้ทดสอบกับ Gemini จริง** (เครื่องนี้ยังไม่มี `gcloud` และยังไม่ได้ล็อกอิน) — ทดสอบแล้วถึงขั้นสถานะ `no_login` / `no_project` และการสร้าง config
+- [x] **ใช้ API key (Thirx, เข้ากันได้กับ OpenAI) เป็นเส้นทางหลัก** — ตั้ง `THIRX_API_KEY` ใน `.env`; ทดสอบกับของจริงแล้ว (ตอบภายใน ~12–17 วินาที, ผ่านหน้าเว็บครบทาง); เส้นทาง Google Login (Vertex AI / ADC) เก็บเป็นทางเลือกสำรอง (ยังไม่เคยทดสอบกับ Gemini จริง — ต้องผูก billing ก่อน)
+- [x] Antigravity SDK ไม่รองรับ API key ของ OpenAI-compatible (โหมด `LocalOpenAIAgentConfig` ออกแบบไว้สำหรับเซิร์ฟเวอร์ในเครื่องอย่าง Ollama) จึงเรียก Thirx ด้วย `httpx` ตรงๆ แทน; SDK ใช้เฉพาะเส้นทาง Vertex
+- [ ] คุณภาพคำใบ้จากโมเดลฟรี (Qwen3.8-27B-free) ยังไม่ได้ประเมินเป็นระบบ — ลองแล้ว 2 ตัวอย่างได้คำใบ้ตรงกับผลตรวจ แต่ควรให้คนลองกับหลายด่านและดูว่าเผลอเฉลยเกินระดับหรือไม่
 - [ ] AI รีวิว flow ในโหมด Studio (วิจารณ์ดีไซน์ที่กฎตรวจไม่เจอ)
 - [ ] AI ช่วยสร้างด่านจากคำอธิบายภาษาไทย (structured output → flow เฉลย + checks + คำใบ้) — ช่วยเร่ง Phase 3
 - [ ] บล็อก AI ในตัวจำลองเรียก LLM จริง (ตอนนี้เป็นกฎคำสำคัญ)
