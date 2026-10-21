@@ -1,0 +1,115 @@
+* {
+  font-family: 'IBM Plex Sans Thai', sans-serif;
+  box-sizing: border-box;
+}
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+html, body, #workspace-viewport, #canvas-world {
+  cursor: default !important;
+}
+#workspace-viewport.panning, #workspace-viewport.panning #canvas-world {
+  cursor: grabbing !important;
+}
+.workflow-node {
+  cursor: move !important;
+  user-select: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.workflow-node:hover {
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.5);
+}
+.workflow-node.selected {
+  box-shadow: 0 0 0 2.5px #6366f1, 0 15px 35px -5px rgba(99, 102, 241, 0.45);
+}
+
+.canvas-grid {
+  background-color: #0b1120;
+  background-image: 
+    radial-gradient(rgba(148, 163, 184, 0.22) 1.5px, transparent 1.5px),
+    radial-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px, 120px 120px;
+}
+
+.port-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer !important;
+  z-index: 30;
+}
+.port-dot:hover {
+  transform: scale(1.4);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.95);
+}
+
+.connection-path {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+  pointer-events: stroke;
+  cursor: pointer !important;
+}
+.connection-path:hover {
+  stroke-width: 5.5;
+  stroke: #f43f5e !important;
+}
+.connection-active {
+  stroke-dasharray: 8 6;
+  animation: flowDash 0.7s linear infinite;
+}
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+#custom-cursor-ring {
+  pointer-events: none;
+  position: fixed;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+  border: 2px solid rgba(56, 189, 248, 0.85);
+  background: rgba(56, 189, 248, 0.15);
+  border-radius: 50%;
+  z-index: 9999;
+  display: none;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+#custom-cursor-ring::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+.active-target-field {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25) !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}

@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network & Electrical Diagram Designer | SI Solution Builder</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas2Image / html2canvas for instant export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+    body {
+      font-family: 'Sarabun', sans-serif;
+      user-select: none;
+    }
+
+    .tech-font {
+      font-family: 'Chakra Petch', sans-serif;
+    }
+
+    /* Presentation Slide Sheet */
+    .slide-canvas-container {
+      aspect-ratio: 16 / 9;
+      width: 1280px;
+      height: 720px;
+      min-width: 1280px;
+      min-height: 720px;
+      background-size: 20px 20px;
+      background-image: 
+        radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Cable Link Styles */
+    .cable-path {
+      cursor: pointer;
+      transition: stroke-width 0.15s ease;
+    }
+    .cable-path:hover {
+      stroke-width: 4.5px !important;
+      filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
+    }
+
+    /* Node Active Pulse */
+    .node-selected {
+      outline: 2px dashed #2563eb;
+      outline-offset: 4px;
+      box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.25);
+    }
+
+    .connecting-source {
+      outline: 2px solid #ea580c !important;
+      outline-offset: 4px;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printArea, #printArea * {
+        visibility: visible;
+      }
+      #printArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        box-shadow: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+  <!-- Top Application Navigation Bar -->
+  <header class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between z-30 shadow-sm no-print">
+    <div class="flex items-center space-x-3">
+      <div class="bg-gradient-to-tr from-orange-600 to-amber-500 text-white p-2 rounded-lg shadow-sm flex items-center justify-center">
+        <i data-lucide="network" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-slate-900 leading-tight">SI Topology & Proposal Designer</h1>
+        <p class="text-xs text-slate-500">ระบบออกแบบผังโครงข่ายและระบบไฟ เพื่อเสนองานระดับองค์กร</p>
+      </div>
+    </div>
+
+    <!-- Active Tool Status Indicator -->
+    <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 text-xs">
+      <span class="text-slate-500 font-medium">โหมดปัจจุบัน:</span>
+      <span id="activeModeText" class="font-bold text-blue-600 flex items-center gap-1">
+        <i data-lucide="mouse-pointer" class="w-3.5 h-3.5"></i> เลือก / ขยับอุปกรณ์ (Select)
+      </span>
+    </div>
+
+    <!-- Actions & Output Buttons -->
+    <div class="flex items-center space-x-2">
+      <button id="btnLoadSample" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-medium text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition">
+        <i data-lucide="sparkles" class="w-4 h-4 text-amber-600"></i> โหลดผังรีสอร์ทตัวอย่าง
+      </button>
+
+      <button id="btnClearCanvas" class="bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-200 text-xs px-3 py-2 rounded-lg flex items-center gap-1 transition">
+        <i data-lucide="trash-2" class="w-4 h-4"></i> ล้างผัง
+      </button>
+
+      <div class="h-5 w-px bg-slate-200"></div>
+
+      <button id="btnExportImage" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+        <i data-lucide="image" class="w-4 h-4 text-slate-600"></i> บันทึกเป็นรูปภาพ (PNG)
+      </button>
+
+      <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+        <i data-lucide="printer" class="w-4 h-4"></i> พิมพ์ / สไลด์ PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace Container: Sidebar + Slide Canvas + Inspector -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Left Sidebar: Device Library & Cable Connection Tools -->
+    <aside class="w-72 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm overflow-hidden no-print">
+      
+      <!-- Cable Connection Palette -->
+      <div class="p-3 border-b border-slate-200 bg-slate-50/80">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+            <i data-lucide="cable" class="w-4 h-4 text-slate-700"></i> ลากสายสัญญาณ (Cabling)
+          </span>
+          <button id="btnCancelConnect" class="hidden text-xs text-rose-500 hover:underline">ยกเลิก</button>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-cable="fiber" class="cable-tool-btn flex flex-col items-center justify-center p-2 rounded border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-800 text-[11px] font-semibold transition">
+            <span class="w-3 h-1 bg-[#ea580c] rounded-full mb-1"></span>
+            OFC Fiber
+          </button>
+          <button data-cable="lan" class="cable-tool-btn flex flex-col items-center justify-center p-2 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-semibold transition">
+            <span class="w-3 h-1 bg-[#2563eb] rounded-full mb-1"></span>
+            LAN CAT6
+          </button>
+          <button data-cable="power" class="cable-tool-btn flex flex-col items-center justify-center p-2 rounded border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 text-[11px] font-semibold transition">
+            <span class="w-3 h-1 bg-[#dc2626] rounded-full mb-1"></span>
+            Power AC/DC
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1.5">คลิกชนิดสาย ➔ คลิกอุปกรณ์ต้นทาง ➔ คลิกอุปกรณ์ปลายทาง</p>
+      </div>
+
+      <!-- Device Category Tabs & Add List -->
+      <div class="flex-1 overflow-y-auto p-3 space-y-4">
+        
+        <!-- Network Core & ISP -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 mb-2">
+            <i data-lucide="cloud" class="w-3.5 h-3.5 text-blue-500"></i> ISP & Core Gateway
+          </span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="spawnDevice('isp', '3BB Broadband', 'WAN 1 (PPPoE)')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-left transition">
+              <div class="w-7 h-7 bg-orange-100 text-orange-600 rounded flex items-center justify-center shrink-0 font-bold text-xs">3BB</div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">ISP 3BB</div>
+                <div class="text-[10px] text-slate-400">WAN Internet</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('isp', 'NT Broadband', 'WAN 2 (Fiber)')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/40 text-left transition">
+              <div class="w-7 h-7 bg-amber-100 text-amber-700 rounded flex items-center justify-center shrink-0 font-bold text-xs">NT</div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">ISP NT</div>
+                <div class="text-[10px] text-slate-400">Backup Link</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('core-router', 'RB4011 Gateway', '192.168.2.1/24')" class="col-span-2 device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 text-left transition">
+              <div class="w-7 h-7 bg-slate-800 text-white rounded flex items-center justify-center shrink-0"><i data-lucide="cpu" class="w-4 h-4"></i></div>
+              <div>
+                <div class="text-xs font-semibold text-slate-900">Core Router (MikroTik)</div>
+                <div class="text-[10px] text-slate-400">RB4011 / Load Balancing</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Switches & Distribution -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 mb-2">
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-indigo-500"></i> Distribution & Switch
+          </span>
+          <div class="grid grid-cols-1 gap-1.5">
+            <button onclick="spawnDevice('switch-core', 'CRS112-8G-4S-IN', '192.168.2.10')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 text-left transition">
+              <div class="w-7 h-7 bg-indigo-100 text-indigo-700 rounded flex items-center justify-center shrink-0"><i data-lucide="layers" class="w-4 h-4"></i></div>
+              <div>
+                <div class="text-xs font-medium text-slate-800">Distribution Switch 8G-4S</div>
+                <div class="text-[10px] text-slate-400">CRS112 Fiber + Gigabit</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('switch-poe', 'SW Lobby (PoE)', '192.168.2.12')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 text-left transition">
+              <div class="w-7 h-7 bg-blue-100 text-blue-700 rounded flex items-center justify-center shrink-0"><i data-lucide="zap" class="w-4 h-4"></i></div>
+              <div>
+                <div class="text-xs font-medium text-slate-800">PoE Gigabit Switch</div>
+                <div class="text-[10px] text-slate-400">CSS610 / จ่ายไฟให้อุปกรณ์</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('splitter', 'Splitter 4 port', 'Optical Splitter')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-orange-400 hover:bg-orange-50/30 text-left transition">
+              <div class="w-7 h-7 bg-amber-500 text-white rounded flex items-center justify-center shrink-0"><i data-lucide="git-fork" class="w-4 h-4"></i></div>
+              <div>
+                <div class="text-xs font-medium text-slate-800">Fiber Splitter (4/8 Port)</div>
+                <div class="text-[10px] text-slate-400">กระจายสายใยแก้วนำแสง</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Access Points & Endpoints -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 mb-2">
+            <i data-lucide="wifi" class="w-3.5 h-3.5 text-emerald-500"></i> Wireless & Terminals
+          </span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="spawnDevice('ap-ceiling', 'AP Ceiling', '192.168.100.21')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-left transition">
+              <div class="w-7 h-7 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center shrink-0"><i data-lucide="disc" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">Ceiling AP</div>
+                <div class="text-[10px] text-slate-400">Wi-Fi จานกลม</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('router-villa', 'RT Villa 1', '192.168.100.10')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/40 text-left transition">
+              <div class="w-7 h-7 bg-slate-100 text-slate-700 rounded flex items-center justify-center shrink-0"><i data-lucide="router" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">Villa Router</div>
+                <div class="text-[10px] text-slate-400">เราเตอร์บ้านพัก</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('server', 'Server POS', '192.168.2.99')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-left transition">
+              <div class="w-7 h-7 bg-slate-800 text-white rounded flex items-center justify-center shrink-0"><i data-lucide="server" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">Server / NAS</div>
+                <div class="text-[10px] text-slate-400">ระบบฐานข้อมูล</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('cctv', 'CCTV IP-Cam', '192.168.30.15')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-left transition">
+              <div class="w-7 h-7 bg-rose-100 text-rose-700 rounded flex items-center justify-center shrink-0"><i data-lucide="video" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">กล้อง CCTV</div>
+                <div class="text-[10px] text-slate-400">PoE IP Camera</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('terminal', 'The Barn POS', '192.168.2.105')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-left transition">
+              <div class="w-7 h-7 bg-blue-100 text-blue-700 rounded flex items-center justify-center shrink-0"><i data-lucide="monitor" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">POS Cashier</div>
+                <div class="text-[10px] text-slate-400">เครื่องคิดเงิน</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('fingerprint', 'Fingerprint Time', '192.168.2.80')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-left transition">
+              <div class="w-7 h-7 bg-amber-100 text-amber-700 rounded flex items-center justify-center shrink-0"><i data-lucide="fingerprint" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">สแกนนิ้ว</div>
+                <div class="text-[10px] text-slate-400">Time Attendance</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Electrical & Power System -->
+        <div>
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 mb-2">
+            <i data-lucide="battery-charging" class="w-3.5 h-3.5 text-amber-500"></i> Electrical & Backup Power
+          </span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="spawnDevice('mdb', 'Main MDB Panel', '3-Phase 380V')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/30 text-left transition">
+              <div class="w-7 h-7 bg-slate-900 text-amber-400 rounded flex items-center justify-center shrink-0 font-bold text-[10px]">MDB</div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">ตู้ไฟเมน MDB</div>
+                <div class="text-[10px] text-slate-400">Main Breaker</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('ups', 'UPS Backup 2kVA', 'Online Double-Conv')" class="device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/30 text-left transition">
+              <div class="w-7 h-7 bg-amber-500 text-white rounded flex items-center justify-center shrink-0"><i data-lucide="battery-charging" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">UPS สำรองไฟ</div>
+                <div class="text-[10px] text-slate-400">2000VA Rack</div>
+              </div>
+            </button>
+            <button onclick="spawnDevice('solar', 'Solar Inverter 5kW', 'On-Grid Hybrid')" class="col-span-2 device-spawn-btn flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 text-left transition">
+              <div class="w-7 h-7 bg-emerald-600 text-white rounded flex items-center justify-center shrink-0"><i data-lucide="sun" class="w-4 h-4"></i></div>
+              <div class="truncate">
+                <div class="text-xs font-medium text-slate-800 truncate">Solar Hybrid Inverter</div>
+                <div class="text-[10px] text-slate-400">ระบบพลังงานแสงอาทิตย์สำหรับตู้ Rack</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick Hint -->
+      <div class="p-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
+        <span><i data-lucide="move" class="inline w-3 h-3"></i> คลิกและลากเพื่อย้ายอุปกรณ์</span>
+        <span class="text-slate-400">Ctrl+Z / Del</span>
+      </div>
+    </aside>
+
+    <!-- Center: Interactive 16:9 Presentation Slide Canvas -->
+    <main class="flex-1 overflow-auto bg-slate-200/90 p-6 flex justify-center items-start">
+      
+      <!-- Slide Wrapper -->
+      <div id="printArea" class="bg-white shadow-2xl rounded-sm border border-slate-300 relative slide-canvas-container flex flex-col overflow-hidden">
+        
+        <!-- Presentation Slide Header (Editable) -->
+        <div class="px-8 pt-6 pb-3 flex items-start justify-between border-b border-slate-100 bg-white z-10">
+          <div class="flex-1">
+            <div class="flex items-center gap-3">
+              <h2 id="slideTitle" contenteditable="true" spellcheck="false" class="text-2xl font-bold tracking-tight text-slate-900 border-b border-transparent hover:border-blue-400 focus:outline-none focus:border-blue-600 px-1 py-0.5 rounded">
+                Network & Power Topology Diagram
+              </h2>
+              <span class="text-xs bg-blue-100 text-blue-800 font-semibold px-2 py-0.5 rounded">Proposal Stage</span>
+            </div>
+            <p id="slideSubtitle" contenteditable="true" spellcheck="false" class="text-xs text-slate-500 mt-0.5 border-b border-transparent hover:border-blue-400 focus:outline-none px-1">
+              โครงการ: วางโครงข่ายใยแก้วนำแสง (OFC) และระบบ Wi-Fi บริหารจัดการรีสอร์ท (Villa & Hotel Complex)
+            </p>
+          </div>
+
+          <!-- SI / Telco Corporate Branding Section (Triple T / Your Company) -->
+          <div class="flex items-center gap-6">
+            <!-- VLAN & Cable Legend Box -->
+            <div class="bg-slate-50 border border-slate-300 rounded p-2 text-[10px] shadow-xs">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-slate-700">
+                <div><span class="font-bold text-slate-900">VL1 Manage:</span> 192.168.2.0/24</div>
+                <div class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-[#ea580c] inline-block"></span> OFC 12-Core (Fiber)</div>
+                <div><span class="font-bold text-slate-900">VL100 WiFi:</span> 192.168.100.0/22</div>
+                <div class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-[#2563eb] inline-block"></span> LAN CAT6 (Copper)</div>
+                <div><span class="font-bold text-slate-900">VL30 CCTV:</span> 192.168.30.0/24</div>
+                <div class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-[#dc2626] inline-block"></span> Power / UPS (AC)</div>
+              </div>
+            </div>
+
+            <!-- Company Logo Badge -->
+            <div class="text-right">
+              <div class="text-lg font-black tracking-tight text-slate-900 leading-none">
+                <span class="text-orange-600">SMART</span>CONNECT
+              </div>
+              <div class="text-[9px] tracking-widest text-slate-400 uppercase font-semibold mt-0.5">Integrator & Telecom Solutions</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas Drag and SVG Cable Layer Area -->
+        <div id="slideCanvas" class="relative flex-1 w-full h-full overflow-hidden select-none">
+          <!-- SVG Cable Connection Layer -->
+          <svg id="svgLayer" class="absolute inset-0 w-full h-full pointer-events-none z-0">
+            <defs>
+              <!-- Arrow marker if needed -->
+              <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+              </marker>
+            </defs>
+            <g id="cableConnectionsGroup"></g>
+            <path id="tempConnectionLine" d="" fill="none" stroke="#ea580c" stroke-width="2.5" stroke-dasharray="4 4" class="hidden"></path>
+          </svg>
+
+          <!-- Interactive Nodes Container -->
+          <div id="nodesContainer" class="absolute inset-0 z-10 pointer-events-none"></div>
+        </div>
+
+        <!-- Slide Footer Bar (Triple T Confidential Style) -->
+        <div class="h-6 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 flex items-center justify-between px-6 text-[10px] text-white/90 tracking-wide font-medium z-10">
+          <span>Project Proposal & Solution Architecture Design</span>
+          <span class="tracking-wider uppercase">Confidential & Proprietary Information</span>
+          <span id="slideDateText">Date: 2026-10-21</span>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Right Sidebar: Node & Line Inspector / Configuration -->
+    <aside id="inspectorPanel" class="w-72 bg-white border-l border-slate-200 flex flex-col z-20 shadow-sm no-print">
+      
+      <!-- Panel Header -->
+      <div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <span class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="sliders" class="w-4 h-4 text-blue-600"></i> คุณสมบัติอุปกรณ์ (Inspector)
+        </span>
+        <button id="btnCloseInspector" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Content Area -->
+      <div id="inspectorContent" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <!-- Empty Selection Placeholder -->
+        <div id="emptyInspectorState" class="h-full flex flex-col items-center justify-center text-center text-slate-400 py-12">
+          <i data-lucide="mouse-pointer-click" class="w-10 h-10 mb-2 stroke-1 text-slate-300"></i>
+          <p class="text-xs font-medium">คลิกเลือกอุปกรณ์หรือสายในผัง</p>
+          <p class="text-[11px] text-slate-400 mt-1">เพื่อแก้ไขชื่อ, IP Address, หรือลบรายการ</p>
+        </div>
+
+        <!-- Node Configuration Form -->
+        <div id="nodeInspectorForm" class="hidden space-y-3.5 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ชื่ออุปกรณ์ / ตำแหน่ง (Label)</label>
+            <input type="text" id="inpNodeName" class="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800 font-medium">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">IP Address / ข้อมูลพอร์ต</label>
+            <input type="text" id="inpNodeIP" class="w-full px-2.5 py-1.5 border border-slate-300 rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none text-blue-700">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">รุ่นอุปกรณ์ / สเปก (Model)</label>
+            <input type="text" id="inpNodeModel" class="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">VLAN / กลุ่มเครือข่าย</label>
+            <select id="inpNodeVLAN" class="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800">
+              <option value="none">- ไม่ระบุ -</option>
+              <option value="VLAN 1 (Management)">VLAN 1 (Management: 192.168.2.x)</option>
+              <option value="VLAN 100 (Guest Wi-Fi)">VLAN 100 (Guest Wi-Fi: 192.168.100.x)</option>
+              <option value="VLAN 30 (CCTV)">VLAN 30 (CCTV: 192.168.30.x)</option>
+              <option value="VLAN 20 (POS Backoffice)">VLAN 20 (POS Office)</option>
+              <option value="Electrical Power">Electrical / Power Line</option>
+            </select>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+            <button id="btnDeleteSelectedNode" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-medium py-2 rounded flex items-center justify-center gap-1.5 transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i> ลบอุปกรณ์นี้ออกจากผัง
+            </button>
+          </div>
+        </div>
+
+        <!-- Cable Connection Configuration Form -->
+        <div id="cableInspectorForm" class="hidden space-y-3.5 text-xs">
+          <div>
+            <span class="text-xs font-bold text-slate-800">สายเชื่อมต่อ (Connection Link)</span>
+            <div id="cableEndpointsInfo" class="mt-1 text-[11px] text-slate-500 font-mono bg-slate-50 p-2 rounded border border-slate-200">
+              Router A ➔ Switch B
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ประเภทสาย (Cable Media)</label>
+            <select id="inpCableType" class="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800 font-medium">
+              <option value="fiber">OFC Fiber Optic (ส้ม - 12 Core)</option>
+              <option value="lan">LAN UTP CAT6 (น้ำเงิน - Gigabit)</option>
+              <option value="power">สายเมนไฟฟ้า / UPS (แดง)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">ป้ายกำกับเส้นทาง (Label)</label>
+            <input type="text" id="inpCableLabel" placeholder="เช่น 10G SFP+, OFC, 1G PoE" class="w-full px-2.5 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          </div>
+
+          <div class="pt-2 border-t border-slate-100">
+            <button id="btnDeleteSelectedCable" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-medium py-2 rounded flex items-center justify-center gap-1.5 transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i> ลบสายเชื่อมต่อนี้
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Topology Quick Summary Counter -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">
+        <div class="flex justify-between items-center mb-1">
+          <span>จำนวนอุปกรณ์ทั้งหมด:</span>
+          <span id="counterNodes" class="font-bold text-slate-900 font-mono">0 ตัว</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>จุดเชื่อมต่อสาย:</span>
+          <span id="counterCables" class="font-bold text-slate-900 font-mono">0 เส้น</span>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Notification Toast Box -->
+  <div id="toastMessage" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2 transform translate-y-16 opacity-0 transition-all duration-300 pointer-events-none">
+    <i data-lucide="info" class="w-4 h-4 text-orange-400"></i>
+    <span id="toastText">ข้อความแจ้งเตือน</span>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // --- State Management ---
+    const state = {
+      nodes: [],
+      cables: [],
+      selectedNodeId: null,
+      selectedCableId: null,
+      connectingMode: null, // null | 'fiber' | 'lan' | 'power'
+      connectSourceNodeId: null,
+      isDraggingNode: false,
+      draggedNodeId: null,
+      dragOffset: { x: 0, y: 0 },
+      nextId: 100
+    };
+
+    // DOM Elements
+    const slideCanvas = document.getElementById('slideCanvas');
+    const nodesContainer = document.getElementById('nodesContainer');
+    const cableConnectionsGroup = document.getElementById('cableConnectionsGroup');
+    const tempConnectionLine = document.getElementById('tempConnectionLine');
+    const activeModeText = document.getElementById('activeModeText');
+    const btnCancelConnect = document.getElementById('btnCancelConnect');
+
+    // Inspector Elements
+    const emptyInspectorState = document.getElementById('emptyInspectorState');
+    const nodeInspectorForm = document.getElementById('nodeInspectorForm');
+    const cableInspectorForm = document.getElementById('cableInspectorForm');
+    const inpNodeName = document.getElementById('inpNodeName');
+    const inpNodeIP = document.getElementById('inpNodeIP');
+    const inpNodeModel = document.getElementById('inpNodeModel');
+    const inpNodeVLAN = document.getElementById('inpNodeVLAN');
+    const inpCableType = document.getElementById('inpCableType');
+    const inpCableLabel = document.getElementById('inpCableLabel');
+    const cableEndpointsInfo = document.getElementById('cableEndpointsInfo');
+    const counterNodes = document.getElementById('counterNodes');
+    const counterCables = document.getElementById('counterCables');
+
+    // --- Device Catalog Specification & Realistic SVG Icons ---
+    const DEVICE_DEFS = {
+      'isp': {
+        width: 76, height: 70,
+        renderIcon: (name) => `
+          <div class="relative flex flex-col items-center justify-center">
+            <svg class="w-14 h-10 text-blue-500 drop-shadow-sm" viewBox="0 0 24 24" fill="#eff6ff" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+            </svg>
+            <span class="absolute text-[11px] font-black text-slate-800 tracking-tight">${name.includes('3BB') ? '3BB' : (name.includes('NT') ? 'NT' : 'ISP')}</span>
+          </div>`
+      },
+      'core-router': {
+        width: 130, height: 60,
+        renderIcon: () => `
+          <div class="w-full h-11 bg-gradient-to-b from-slate-700 to-slate-900 border border-slate-600 rounded shadow-md flex flex-col justify-between p-1.5 text-white">
+            <div class="flex items-center justify-between px-1">
+              <div class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-[9px] font-mono tracking-tighter text-slate-300">RB4011-GS+</span>
+              </div>
+              <span class="text-[8px] bg-blue-500/30 text-blue-300 px-1 rounded">CORE</span>
+            </div>
+            <!-- Ports representation -->
+            <div class="flex items-center space-x-1 px-1 bg-slate-950/60 py-0.5 rounded">
+              <span class="w-2 h-2 rounded-xs bg-amber-400"></span>
+              <span class="w-2 h-2 rounded-xs bg-blue-400"></span>
+              <div class="flex-1 flex justify-end space-x-0.5">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-xs"></span>
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-xs"></span>
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-xs"></span>
+                <span class="w-1.5 h-1.5 bg-slate-600 rounded-xs"></span>
+              </div>
+            </div>
+          </div>`
+      },
+      'switch-core': {
+        width: 135, height: 55,
+        renderIcon: () => `
+          <div class="w-full h-10 bg-gradient-to-b from-slate-200 to-slate-300 border border-slate-400 rounded shadow-sm flex flex-col justify-between p-1 text-slate-800">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[9px] font-bold tracking-tight text-slate-700">CRS112 Distribution</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            </div>
+            <div class="flex items-center space-x-0.5 bg-slate-800 px-1 py-0.5 rounded">
+              <div class="flex gap-0.5">
+                <span class="w-1.5 h-2 bg-blue-400 rounded-[1px]"></span>
+                <span class="w-1.5 h-2 bg-blue-400 rounded-[1px]"></span>
+                <span class="w-1.5 h-2 bg-blue-400 rounded-[1px]"></span>
+                <span class="w-1.5 h-2 bg-blue-400 rounded-[1px]"></span>
+              </div>
+              <div class="flex-1 flex justify-end gap-1">
+                <span class="w-2 h-2 bg-orange-400 rounded-[1px]"></span>
+                <span class="w-2 h-2 bg-orange-400 rounded-[1px]"></span>
+              </div>
+            </div>
+          </div>`
+      },
+      'switch-poe': {
+        width: 120, height: 52,
+        renderIcon: () => `
+          <div class="w-full h-9 bg-slate-800 border border-slate-600 rounded shadow flex flex-col justify-between p-1 text-white">
+            <div class="flex justify-between items-center px-1">
+              <span class="text-[8px] font-mono text-emerald-400 flex items-center gap-0.5"><i data-lucide="zap" class="w-2 h-2 inline"></i> PoE+</span>
+              <span class="text-[8px] text-slate-300">CSS610</span>
+            </div>
+            <div class="flex justify-center gap-1 bg-black/40 py-0.5 rounded">
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+              <span class="w-1.5 h-1.5 bg-emerald-400 rounded-[1px]"></span>
+            </div>
+          </div>`
+      },
+      'splitter': {
+        width: 105, height: 52,
+        renderIcon: () => `
+          <div class="w-full h-9 bg-gradient-to-r from-neutral-900 to-black border-2 border-orange-500 rounded shadow-md flex items-center justify-between px-2 text-white">
+            <div class="flex items-center gap-1">
+              <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+              <span class="text-[10px] font-black text-orange-400">3BB</span>
+            </div>
+            <span class="text-[9px] font-bold text-slate-200">Splitter 4P</span>
+          </div>`
+      },
+      'ap-ceiling': {
+        width: 60, height: 60,
+        renderIcon: () => `
+          <div class="w-12 h-12 bg-white rounded-full border-2 border-slate-300 shadow-md flex flex-col items-center justify-center p-1 relative">
+            <div class="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center">
+              <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+            </div>
+            <span class="text-[7px] text-slate-400 font-bold uppercase mt-0.5">WiFi 6</span>
+          </div>`
+      },
+      'router-villa': {
+        width: 64, height: 64,
+        renderIcon: () => `
+          <div class="relative flex flex-col items-center">
+            <!-- 2 Antennas -->
+            <div class="flex justify-between w-8 mb-[-3px]">
+              <div class="w-0.5 h-4 bg-slate-700 transform -rotate-12"></div>
+              <div class="w-0.5 h-4 bg-slate-700 transform rotate-12"></div>
+            </div>
+            <div class="w-11 h-7 bg-slate-800 rounded border border-slate-600 shadow-sm flex items-center justify-center space-x-1">
+              <span class="w-1 h-1 bg-emerald-400 rounded-full"></span>
+              <span class="w-1 h-1 bg-emerald-400 rounded-full"></span>
+              <span class="w-1 h-1 bg-blue-400 rounded-full"></span>
+            </div>
+          </div>`
+      },
+      'server': {
+        width: 68, height: 75,
+        renderIcon: () => `
+          <div class="w-10 h-14 bg-gradient-to-b from-slate-800 to-slate-950 border border-slate-600 rounded shadow-md flex flex-col justify-between p-1 text-white">
+            <div class="space-y-1">
+              <div class="h-2 bg-slate-700 rounded-xs flex items-center justify-end px-0.5"><span class="w-1 h-1 bg-blue-400 rounded-full"></span></div>
+              <div class="h-2 bg-slate-700 rounded-xs flex items-center justify-end px-0.5"><span class="w-1 h-1 bg-blue-400 rounded-full"></span></div>
+              <div class="h-2 bg-slate-700 rounded-xs flex items-center justify-end px-0.5"><span class="w-1 h-1 bg-emerald-400 rounded-full"></span></div>
+            </div>
+            <div class="text-[7px] font-mono text-center text-slate-400">SRV POS</div>
+          </div>`
+      },
+      'cctv': {
+        width: 60, height: 60,
+        renderIcon: () => `
+          <div class="w-11 h-11 bg-rose-50 border border-rose-300 rounded-full shadow-sm flex items-center justify-center text-rose-600">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/>
+              <rect x="2" y="6" width="14" height="12" rx="2"/>
+            </svg>
+          </div>`
+      },
+      'terminal': {
+        width: 65, height: 65,
+        renderIcon: () => `
+          <div class="w-11 h-10 bg-slate-100 border border-slate-300 rounded shadow-xs flex flex-col items-center justify-center text-slate-700">
+            <svg class="w-6 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>
+            </svg>
+            <span class="text-[8px] font-bold text-slate-600">CASHIER</span>
+          </div>`
+      },
+      'fingerprint': {
+        width: 60, height: 65,
+        renderIcon: () => `
+          <div class="w-10 h-11 bg-amber-50 border border-amber-300 rounded shadow-xs flex flex-col items-center justify-center p-1 text-amber-700">
+            <svg class="w-5 h-5 mb-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/>
+            </svg>
+            <span class="text-[7px] font-bold">TIME-SCAN</span>
+          </div>`
+      },
+      'mdb': {
+        width: 80, height: 75,
+        renderIcon: () => `
+          <div class="w-14 h-14 bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-500 rounded shadow-md flex flex-col justify-between p-1 text-white">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-0.5">
+              <span class="text-[8px] font-bold text-amber-400">MAIN MDB</span>
+              <span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+            </div>
+            <div class="flex justify-center items-center gap-1">
+              <span class="w-2 h-4 bg-slate-800 border border-amber-400/60 rounded-[1px]"></span>
+              <span class="w-2 h-4 bg-slate-800 border border-amber-400/60 rounded-[1px]"></span>
+              <span class="w-2 h-4 bg-slate-800 border border-amber-400/60 rounded-[1px]"></span>
+            </div>
+            <div class="text-[7px] text-center text-slate-400 font-mono">380V 50Hz</div>
+          </div>`
+      },
+      'ups': {
+        width: 75, height: 65,
+        renderIcon: () => `
+          <div class="w-13 h-11 bg-slate-800 border border-slate-600 rounded shadow flex flex-col justify-between p-1 text-white">
+            <div class="flex justify-between items-center">
+              <span class="text-[8px] font-bold text-amber-400 flex items-center gap-0.5"><i data-lucide="battery-charging" class="w-2 h-2"></i> UPS</span>
+              <span class="text-[7px] text-emerald-400">ONLINE</span>
+            </div>
+            <div class="w-full bg-slate-950 h-2 rounded flex items-center px-1">
+              <div class="bg-emerald-500 h-1 rounded-full w-4/5"></div>
+            </div>
+            <div class="text-[7px] text-slate-400 text-center font-mono">2000VA / 1800W</div>
+          </div>`
+      },
+      'solar': {
+        width: 80, height: 70,
+        renderIcon: () => `
+          <div class="w-14 h-12 bg-emerald-950 border border-emerald-500 rounded shadow flex flex-col justify-between p-1 text-white">
+            <div class="flex justify-between items-center">
+              <span class="text-[8px] font-bold text-emerald-300">HYBRID</span>
+              <span class="text-[8px] text-amber-300">5kW</span>
+            </div>
+            <div class="flex justify-center">
+              <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/></svg>
+            </div>
+            <div class="text-[7px] text-center text-emerald-300 font-mono">Solar to AC</div>
+          </div>`
+      }
+    };
+
+    // --- Helper Functions ---
+    function showToast(text) {
+      const toast = document.getElementById('toastMessage');
+      document.getElementById('toastText').innerText = text;
+      toast.classList.remove('translate-y-16', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-16', 'opacity-0');
+      }, 2500);
+    }
+
+    function generateId() {
+      return 'node_' + (++state.nextId);
+    }
+
+    // Update Counter Badges
+    function updateCounters() {
+      counterNodes.innerText = `${state.nodes.length} ตัว`;
+      counterCables.innerText = `${state.cables.length} เส้น`;
+    }
+
+    // Set Active Cable Drawing Mode
+    function setCableMode(mode) {
+      state.connectingMode = mode;
+      state.connectSourceNodeId = null;
+      tempConnectionLine.classList.add('hidden');
+
+      // Update button visual styles
+      document.querySelectorAll('.cable-tool-btn').forEach(btn => {
+        if (btn.getAttribute('data-cable') === mode) {
+          btn.classList.add('ring-2', 'ring-offset-1', 'ring-slate-800');
+        } else {
+          btn.classList.remove('ring-2', 'ring-offset-1', 'ring-slate-800');
+        }
+      });
+
+      if (mode) {
+        btnCancelConnect.classList.remove('hidden');
+        const labels = {
+          fiber: 'ลากสาย Fiber Optic (ส้ม)',
+          lan: 'ลากสาย LAN CAT6 (น้ำเงิน)',
+          power: 'ลากสายไฟฟ้า Power (แดง)'
+        };
+        activeModeText.innerHTML = `<span class="inline-block w-2.5 h-2.5 rounded-full ${mode === 'fiber' ? 'bg-orange-500' : (mode === 'lan' ? 'bg-blue-600' : 'bg-rose-600')}"></span> ${labels[mode]}`;
+      } else {
+        btnCancelConnect.classList.add('hidden');
+        activeModeText.innerHTML = `<i data-lucide="mouse-pointer" class="w-3.5 h-3.5 inline"></i> เลือก / ขยับอุปกรณ์ (Select)`;
+        lucide.createIcons();
+      }
+    }
+
+    // --- Canvas & Node Creation ---
+    function spawnDevice(type, name, ip, x = null, y = null, vlan = 'none') {
+      const def = DEVICE_DEFS[type] || DEVICE_DEFS['server'];
+      
+      // Default to center if coordinates not provided
+      if (x === null || y === null) {
+        x = 500 + (Math.random() * 80 - 40);
+        y = 280 + (Math.random() * 80 - 40);
+      }
+
+      const newNode = {
+        id: generateId(),
+        type: type,
+        name: name,
+        ip: ip || '',
+        model: type.toUpperCase(),
+        vlan: vlan,
+        x: Math.round(x),
+        y: Math.round(y),
+        width: def.width,
+        height: def.height
+      };
+
+      state.nodes.push(newNode);
+      renderNodeElement(newNode);
+      renderAllCables();
+      updateCounters();
+      selectNode(newNode.id);
+      showToast(`เพิ่ม ${name} ลงในผังเรียบร้อย`);
+      return newNode;
+    }
+
+    function renderNodeElement(node) {
+      const def = DEVICE_DEFS[node.type] || DEVICE_DEFS['server'];
+      const el = document.createElement('div');
+      el.id = node.id;
+      el.className = 'absolute pointer-events-auto cursor-grab active:cursor-grabbing flex flex-col items-center group';
+      el.style.left = `${node.x}px`;
+      el.style.top = `${node.y}px`;
+      el.style.width = `${node.width}px`;
+
+      el.innerHTML = `
+        <div class="node-icon-wrapper w-full flex items-center justify-center transition-transform duration-100 group-hover:scale-105">
+          ${def.renderIcon(node.name)}
+        </div>
+        <!-- Node Text Label (Slide Style) -->
+        <div class="text-center mt-1 w-32 -ml-6 pointer-events-none select-none">
+          <div class="text-[11px] font-bold text-slate-900 leading-tight truncate px-1 node-label-name">${node.name}</div>
+          ${node.ip ? `<div class="text-[9.5px] font-mono text-blue-700 font-medium leading-none truncate mt-0.5 node-label-ip">${node.ip}</div>` : ''}
+        </div>
+      `;
+
+      // Interaction Events
+      el.addEventListener('mousedown', (e) => onNodeMouseDown(e, node.id));
+      el.addEventListener('click', (e) => onNodeClick(e, node.id));
+
+      nodesContainer.appendChild(el);
+      lucide.createIcons();
+    }
+
+    function updateNodeDOM(node) {
+      const el = document.getElementById(node.id);
+      if (!el) return;
+      el.style.left = `${node.x}px`;
+      el.style.top = `${node.y}px`;
+
+      const labelName = el.querySelector('.node-label-name');
+      const labelIP = el.querySelector('.node-label-ip');
+      if (labelName) labelName.innerText = node.name;
+      if (labelIP) labelIP.innerText = node.ip;
+    }
+
+    // --- Cable & Orthogonal Routing Engine ---
+    function addCable(sourceId, targetId, type = 'lan', label = '') {
+      if (sourceId === targetId) return null;
+
+      // Prevent duplicate link
+      const existing = state.cables.find(c => 
+        (c.sourceId === sourceId && c.targetId === targetId) ||
+        (c.sourceId === targetId && c.targetId === sourceId)
+      );
+      if (existing) {
+        showToast('เชื่อมต่ออุปกรณ์คู่นี้อยู่แล้ว');
+        return existing;
+      }
+
+      const cable = {
+        id: 'cable_' + (++state.nextId),
+        sourceId: sourceId,
+        targetId: targetId,
+        type: type, // fiber | lan | power
+        label: label || (type === 'fiber' ? 'OFC' : (type === 'lan' ? 'CAT6' : 'PWR'))
+      };
+
+      state.cables.push(cable);
+      renderAllCables();
+      updateCounters();
+      selectCable(cable.id);
+      showToast('เชื่อมต่อสายสำเร็จ');
+      return cable;
+    }
+
+    // Orthogonal / Right-Angle Path Generator (Clean presentation style)
+    function calculateOrthogonalPath(p1, p2) {
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+
+      // If nearly aligned horizontally or vertically
+      if (Math.abs(dx) < 15 || Math.abs(dy) < 15) {
+        return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+      }
+
+      // Traditional Telecom Flow: Go vertical halfway, then horizontal, then vertical
+      const midY = p1.y + dy * 0.5;
+      return `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`;
+    }
+
+    function renderAllCables() {
+      cableConnectionsGroup.innerHTML = '';
+
+      state.cables.forEach(cable => {
+        const sourceNode = state.nodes.find(n => n.id === cable.sourceId);
+        const targetNode = state.nodes.find(n => n.id === cable.targetId);
+        if (!sourceNode || !targetNode) return;
+
+        // Centers
+        const p1 = {
+          x: sourceNode.x + sourceNode.width / 2,
+          y: sourceNode.y + sourceNode.height / 2
+        };
+        const p2 = {
+          x: targetNode.x + targetNode.width / 2,
+          y: targetNode.y + targetNode.height / 2
+        };
+
+        const pathData = calculateOrthogonalPath(p1, p2);
+
+        // Color definitions matching the Triple T slide
+        let strokeColor = '#2563eb'; // LAN CAT6 Blue
+        let strokeWidth = '2';
+        let dashArray = 'none';
+
+        if (cable.type === 'fiber') {
+          strokeColor = '#ea580c'; // OFC Orange
+          strokeWidth = '2.5';
+        } else if (cable.type === 'power') {
+          strokeColor = '#dc2626'; // Power Red
+          strokeWidth = '2.5';
+          dashArray = '5 3';
+        }
+
+        const isSelected = (state.selectedCableId === cable.id);
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'group pointer-events-auto cursor-pointer');
+        g.onclick = (e) => {
+          e.stopPropagation();
+          selectCable(cable.id);
+        };
+
+        // Invisible wider stroke for easy clicking on thin lines
+        const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hitPath.setAttribute('d', pathData);
+        hitPath.setAttribute('fill', 'none');
+        hitPath.setAttribute('stroke', 'transparent');
+        hitPath.setAttribute('stroke-width', '14');
+
+        // Visual Cable Line
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathData);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', isSelected ? '#7c3aed' : strokeColor);
+        path.setAttribute('stroke-width', isSelected ? '4' : strokeWidth);
+        path.setAttribute('stroke-dasharray', dashArray);
+        path.setAttribute('class', 'cable-path');
+
+        g.appendChild(hitPath);
+        g.appendChild(path);
+
+        // Optional mid-cable badge / label
+        if (cable.label && (cable.type === 'fiber' || isSelected)) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+
+          const textBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          textBg.setAttribute('x', midX - 16);
+          textBg.setAttribute('y', midY - 7);
+          textBg.setAttribute('width', '32');
+          textBg.setAttribute('height', '14');
+          textBg.setAttribute('rx', '3');
+          textBg.setAttribute('fill', cable.type === 'fiber' ? '#ffedd5' : '#eff6ff');
+          textBg.setAttribute('stroke', cable.type === 'fiber' ? '#ea580c' : '#2563eb');
+          textBg.setAttribute('stroke-width', '0.7');
+
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', midX);
+          text.setAttribute('y', midY + 3.5);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('font-size', '8px');
+          text.setAttribute('font-family', 'sans-serif');
+          text.setAttribute('font-weight', 'bold');
+          text.setAttribute('fill', cable.type === 'fiber' ? '#9a3412' : '#1e40af');
+          text.textContent = cable.label;
+
+          g.appendChild(textBg);
+          g.appendChild(text);
+        }
+
+        cableConnectionsGroup.appendChild(g);
+      });
+    }
+
+    // --- Interactive Mouse Events (Drag & Connect) ---
+    function onNodeMouseDown(e, nodeId) {
+      if (state.connectingMode) return; // In connecting mode, handle via click
+      if (e.button !== 0) return; // Only left-click
+
+      e.stopPropagation();
+      state.isDraggingNode = true;
+      state.draggedNodeId = nodeId;
+      selectNode(nodeId);
+
+      const node = state.nodes.find(n => n.id === nodeId);
+      const canvasRect = slideCanvas.getBoundingClientRect();
+
+      state.dragOffset = {
+        x: (e.clientX - canvasRect.left) - node.x,
+        y: (e.clientY - canvasRect.top) - node.y
+      };
+
+      document.addEventListener('mousemove', onNodeMouseMove);
+      document.addEventListener('mouseup', onNodeMouseUp);
+    }
+
+    function onNodeMouseMove(e) {
+      if (!state.isDraggingNode || !state.draggedNodeId) return;
+
+      const canvasRect = slideCanvas.getBoundingClientRect();
+      let newX = (e.clientX - canvasRect.left) - state.dragOffset.x;
+      let newY = (e.clientY - canvasRect.top) - state.dragOffset.y;
+
+      // Keep within bounds of 16:9 canvas
+      newX = Math.max(10, Math.min(1280 - 100, newX));
+      newY = Math.max(10, Math.min(640, newY));
+
+      const node = state.nodes.find(n => n.id === state.draggedNodeId);
+      if (node) {
+        node.x = Math.round(newX);
+        node.y = Math.round(newY);
+        updateNodeDOM(node);
+        renderAllCables();
+      }
+    }
+
+    function onNodeMouseUp() {
+      state.isDraggingNode = false;
+      state.draggedNodeId = null;
+      document.removeEventListener('mousemove', onNodeMouseMove);
+      document.removeEventListener('mouseup', onNodeMouseUp);
+    }
+
+    function onNodeClick(e, nodeId) {
+      e.stopPropagation();
+
+      // Connecting Cables Mode
+      if (state.connectingMode) {
+        if (!state.connectSourceNodeId) {
+          // Selected Source Node
+          state.connectSourceNodeId = nodeId;
+          const nodeEl = document.getElementById(nodeId);
+          if (nodeEl) nodeEl.classList.add('connecting-source');
+          showToast('คลิกเลือกอุปกรณ์ปลายทางเพื่อเชื่อมต่อสาย');
+        } else {
+          // Selected Target Node -> Complete Cable Connection
+          const sourceId = state.connectSourceNodeId;
+          const targetId = nodeId;
+
+          // Remove source highlight
+          const srcEl = document.getElementById(sourceId);
+          if (srcEl) srcEl.classList.remove('connecting-source');
+
+          if (sourceId !== targetId) {
+            addCable(sourceId, targetId, state.connectingMode);
+          }
+
+          // Reset connection mode
+          setCableMode(null);
+        }
+        return;
+      }
+
+      // Normal Selection
+      selectNode(nodeId);
+    }
+
+    // Temporary cable rubber-band line preview while in connecting mode
+    slideCanvas.addEventListener('mousemove', (e) => {
+      if (state.connectingMode && state.connectSourceNodeId) {
+        const sourceNode = state.nodes.find(n => n.id === state.connectSourceNodeId);
+        if (!sourceNode) return;
+
+        const canvasRect = slideCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - canvasRect.left;
+        const mouseY = e.clientY - canvasRect.top;
+
+        const p1 = {
+          x: sourceNode.x + sourceNode.width / 2,
+          y: sourceNode.y + sourceNode.height / 2
+        };
+        const p2 = { x: mouseX, y: mouseY };
+
+        tempConnectionLine.setAttribute('d', calculateOrthogonalPath(p1, p2));
+        tempConnectionLine.setAttribute('stroke', state.connectingMode === 'fiber' ? '#ea580c' : (state.connectingMode === 'power' ? '#dc2626' : '#2563eb'));
+        tempConnectionLine.classList.remove('hidden');
+      }
+    });
+
+    slideCanvas.addEventListener('click', (e) => {
+      // Clicked on empty canvas space
+      if (state.connectingMode && state.connectSourceNodeId) {
+        const srcEl = document.getElementById(state.connectSourceNodeId);
+        if (srcEl) srcEl.classList.remove('connecting-source');
+        setCableMode(null);
+        return;
+      }
+      deselectAll();
+    });
+
+    // --- Selection & Inspector Logic ---
+    function selectNode(nodeId) {
+      deselectAll();
+      state.selectedNodeId = nodeId;
+
+      const node = state.nodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      const el = document.getElementById(nodeId);
+      if (el) el.classList.add('node-selected');
+
+      // Populate inspector
+      emptyInspectorState.classList.add('hidden');
+      cableInspectorForm.classList.add('hidden');
+      nodeInspectorForm.classList.remove('hidden');
+
+      inpNodeName.value = node.name || '';
+      inpNodeIP.value = node.ip || '';
+      inpNodeModel.value = node.model || '';
+      inpNodeVLAN.value = node.vlan || 'none';
+    }
+
+    function selectCable(cableId) {
+      deselectAll();
+      state.selectedCableId = cableId;
+
+      const cable = state.cables.find(c => c.id === cableId);
+      if (!cable) return;
+
+      const sourceNode = state.nodes.find(n => n.id === cable.sourceId);
+      const targetNode = state.nodes.find(n => n.id === cable.targetId);
+
+      // Populate Cable Inspector
+      emptyInspectorState.classList.add('hidden');
+      nodeInspectorForm.classList.add('hidden');
+      cableInspectorForm.classList.remove('hidden');
+
+      cableEndpointsInfo.innerHTML = `<strong>ต้นทาง:</strong> ${sourceNode ? sourceNode.name : 'Unknown'}<br><strong>ปลายทาง:</strong> ${targetNode ? targetNode.name : 'Unknown'}`;
+      inpCableType.value = cable.type || 'lan';
+      inpCableLabel.value = cable.label || '';
+
+      renderAllCables();
+    }
+
+    function deselectAll() {
+      if (state.selectedNodeId) {
+        const el = document.getElementById(state.selectedNodeId);
+        if (el) el.classList.remove('node-selected');
+        state.selectedNodeId = null;
+      }
+      state.selectedCableId = null;
+
+      emptyInspectorState.classList.remove('hidden');
+      nodeInspectorForm.classList.add('hidden');
+      cableInspectorForm.classList.add('hidden');
+      renderAllCables();
+    }
+
+    // Inspector Realtime Event Listeners
+    inpNodeName.addEventListener('input', (e) => {
+      if (!state.selectedNodeId) return;
+      const node = state.nodes.find(n => n.id === state.selectedNodeId);
+      if (node) {
+        node.name = e.target.value;
+        updateNodeDOM(node);
+      }
+    });
+
+    inpNodeIP.addEventListener('input', (e) => {
+      if (!state.selectedNodeId) return;
+      const node = state.nodes.find(n => n.id === state.selectedNodeId);
+      if (node) {
+        node.ip = e.target.value;
+        updateNodeDOM(node);
+      }
+    });
+
+    inpNodeModel.addEventListener('input', (e) => {
+      if (!state.selectedNodeId) return;
+      const node = state.nodes.find(n => n.id === state.selectedNodeId);
+      if (node) node.model = e.target.value;
+    });
+
+    inpNodeVLAN.addEventListener('change', (e) => {
+      if (!state.selectedNodeId) return;
+      const node = state.nodes.find(n => n.id === state.selectedNodeId);
+      if (node) node.vlan = e.target.value;
+    });
+
+    // Cable Inspector Events
+    inpCableType.addEventListener('change', (e) => {
+      if (!state.selectedCableId) return;
+      const cable = state.cables.find(c => c.id === state.selectedCableId);
+      if (cable) {
+        cable.type = e.target.value;
+        renderAllCables();
+      }
+    });
+
+    inpCableLabel.addEventListener('input', (e) => {
+      if (!state.selectedCableId) return;
+      const cable = state.cables.find(c => c.id === state.selectedCableId);
+      if (cable) {
+        cable.label = e.target.value;
+        renderAllCables();
+      }
+    });
+
+    // Deletion Actions
+    document.getElementById('btnDeleteSelectedNode').addEventListener('click', () => {
+      if (!state.selectedNodeId) return;
+      const nodeId = state.selectedNodeId;
+      // Remove connected cables
+      state.cables = state.cables.filter(c => c.sourceId !== nodeId && c.targetId !== nodeId);
+      // Remove node
+      state.nodes = state.nodes.filter(n => n.id !== nodeId);
+      const el = document.getElementById(nodeId);
+      if (el) el.remove();
+      deselectAll();
+      renderAllCables();
+      updateCounters();
+      showToast('ลบอุปกรณ์เรียบร้อยแล้ว');
+    });
+
+    document.getElementById('btnDeleteSelectedCable').addEventListener('click', () => {
+      if (!state.selectedCableId) return;
+      state.cables = state.cables.filter(c => c.id !== state.selectedCableId);
+      deselectAll();
+      renderAllCables();
+      updateCounters();
+      showToast('ลบสายเชื่อมต่อเรียบร้อยแล้ว');
+    });
+
+    // --- Cable Buttons Toolbar Event ---
+    document.querySelectorAll('.cable-tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cableType = btn.getAttribute('data-cable');
+        if (state.connectingMode === cableType) {
+          setCableMode(null);
+        } else {
+          setCableMode(cableType);
+        }
+      });
+    });
+
+    btnCancelConnect.addEventListener('click', () => setCableMode(null));
+    document.getElementById('btnCloseInspector').addEventListener('click', deselectAll);
+
+    // Keyboard Shortcuts (Delete & Esc)
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (state.selectedNodeId) document.getElementById('btnDeleteSelectedNode').click();
+        else if (state.selectedCableId) document.getElementById('btnDeleteSelectedCable').click();
+      }
+      if (e.key === 'Escape') {
+        setCableMode(null);
+        deselectAll();
+      }
+    });
+
+    // Clear Canvas
+    document.getElementById('btnClearCanvas').addEventListener('click', () => {
+      nodesContainer.innerHTML = '';
+      cableConnectionsGroup.innerHTML = '';
+      state.nodes = [];
+      state.cables = [];
+      deselectAll();
+      updateCounters();
+      showToast('ล้างผังโครงข่ายทั้งหมดแล้ว');
+    });
+
+    // Export as High-Resolution PNG for PowerPoint/Client
+    document.getElementById('btnExportImage').addEventListener('click', () => {
+      deselectAll();
+      showToast('กำลังประมวลผลรูปภาพความละเอียดสูง...');
+      
+      const printTarget = document.getElementById('printArea');
+      html2canvas(printTarget, {
+        scale: 2, // 2x resolution
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Network-Topology-Slide-${new Date().toISOString().slice(0,10)}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('ดาวน์โหลดไฟล์ภาพ PNG เรียบร้อย');
+      }).catch(err => {
+        console.error(err);
+        showToast('เกิดข้อผิดพลาดในการบันทึกภาพ');
+      });
+    });
+
+    // --- Preset: Load Full Resort & Villa Diagram (Triple T Slide Match) ---
+    function loadSampleResortDiagram() {
+      // Clear current
+      document.getElementById('btnClearCanvas').click();
+
+      // Top Header text update
+      document.getElementById('slideTitle').innerText = 'Network Diagram (Resort & Villa Complex)';
+      document.getElementById('slideSubtitle').innerText = 'ระบบเครือข่ายใยแก้วนำแสง (OFC 12-Core), POS Office และ Wi-Fi กระจายทั่วบริเวณบ้านพัก';
+
+      // 1. Core & ISP Layer
+      const isp3bb = spawnDevice('isp', '3BB Fiber', 'WAN 1 (PPPoE)', 460, 40);
+      const ispNT = spawnDevice('isp', 'NT Fiber', 'WAN 2 (Backup)', 580, 40);
+      const coreRouter = spawnDevice('core-router', 'RB4011 Gateway', '192.168.2.1/24', 510, 120);
+
+      // 2. Office Backoffice Zone (Left of Core)
+      const swOffice = spawnDevice('switch-poe', 'SW Office Room', '192.168.2.11/24', 330, 140);
+      const srvPos = spawnDevice('server', 'Server POS', '192.168.2.99', 300, 220);
+      const posBarn = spawnDevice('terminal', 'The Barn POS', '192.168.2.101', 220, 220);
+      const timeScan = spawnDevice('fingerprint', 'Fingerprint Time', '192.168.2.80', 140, 220);
+
+      // 3. Central Distribution Switch (CRS112)
+      const distSwitch = spawnDevice('switch-core', 'CRS112-8G-4S-IN', '192.168.2.10', 510, 220);
+
+      // 4. Center Public Area (Lobby & Swimming Pool)
+      const swLobby = spawnDevice('switch-poe', 'SW Lobby & Cafe', '192.168.2.15', 510, 310);
+      const apLobby1 = spawnDevice('ap-ceiling', 'AP Lobby Fl.1', '192.168.100.21', 440, 390);
+      const apLobby2 = spawnDevice('ap-ceiling', 'AP Lobby Fl.2', '192.168.100.22', 510, 390);
+      const apPool = spawnDevice('ap-ceiling', 'AP Pool & Garden', '192.168.100.23', 580, 390);
+
+      // 5. West Zone: Fiber Splitter 4-Port (Villas 7-10 & Staff House)
+      const splitterWest = spawnDevice('splitter', 'Splitter 4P (West)', 'OFC Splice', 260, 310);
+      const rtVilla7 = spawnDevice('router-villa', 'RT Villa 7', '192.168.100.37', 140, 410);
+      const rtVilla8 = spawnDevice('router-villa', 'RT Villa 8', '192.168.100.38', 210, 410);
+      const rtVilla9 = spawnDevice('router-villa', 'RT Villa 9', '192.168.100.39', 280, 410);
+      const rtStaff = spawnDevice('router-villa', 'RT Staff House', '192.168.100.40', 350, 410);
+
+      // 6. East Zone: Fiber Splitter 4-Port (Villas 1-6)
+      const splitterEast = spawnDevice('splitter', 'Splitter 4P (East)', 'OFC Splice', 820, 310);
+      const rtVilla1 = spawnDevice('router-villa', 'RT Villa 1', '192.168.100.31', 700, 410);
+      const rtVilla2 = spawnDevice('router-villa', 'RT Villa 2', '192.168.100.32', 770, 410);
+      const rtVilla3 = spawnDevice('router-villa', 'RT Villa 3', '192.168.100.33', 840, 410);
+      const rtVilla4 = spawnDevice('router-villa', 'RT Villa 4', '192.168.100.34', 910, 410);
+
+      // 7. Power & Backup Row (MDB & UPS)
+      const mdbPanel = spawnDevice('mdb', 'Main MDB Room', '380V Main Grid', 980, 110);
+      const upsCore = spawnDevice('ups', 'UPS 2kVA (Rack)', 'Online Battery', 860, 115);
+
+      // --- Cable Connections (Matching Slide Colors) ---
+      // WAN ISP Connections
+      addCable(isp3bb.id, coreRouter.id, 'fiber', 'PPPoE');
+      addCable(ispNT.id, coreRouter.id, 'lan', 'Static');
+
+      // Core to Office Switch & Distribution
+      addCable(coreRouter.id, swOffice.id, 'lan', '1G Trunk');
+      addCable(coreRouter.id, distSwitch.id, 'lan', '10G Trunk');
+
+      // Office Endpoints (LAN CAT6 Blue)
+      addCable(swOffice.id, srvPos.id, 'lan');
+      addCable(swOffice.id, posBarn.id, 'lan');
+      addCable(swOffice.id, timeScan.id, 'lan');
+
+      // Distribution Switch to Fiber Splitters (Orange Fiber OFC)
+      addCable(distSwitch.id, splitterWest.id, 'fiber', 'OFC 12C');
+      addCable(distSwitch.id, splitterEast.id, 'fiber', 'OFC 12C');
+
+      // Distribution Switch to Central Lobby Switch (LAN CAT6 Blue)
+      addCable(distSwitch.id, swLobby.id, 'lan', 'Gigabit PoE');
+
+      // Lobby APs (LAN CAT6 Blue)
+      addCable(swLobby.id, apLobby1.id, 'lan', 'PoE');
+      addCable(swLobby.id, apLobby2.id, 'lan', 'PoE');
+      addCable(swLobby.id, apPool.id, 'lan', 'PoE');
+
+      // Splitter to West Villas (Fiber OFC Orange)
+      addCable(splitterWest.id, rtVilla7.id, 'fiber', 'Drop Cable');
+      addCable(splitterWest.id, rtVilla8.id, 'fiber', 'Drop Cable');
+      addCable(splitterWest.id, rtVilla9.id, 'fiber', 'Drop Cable');
+      addCable(splitterWest.id, rtStaff.id, 'fiber', 'Drop Cable');
+
+      // Splitter to East Villas (Fiber OFC Orange)
+      addCable(splitterEast.id, rtVilla1.id, 'fiber', 'Drop Cable');
+      addCable(splitterEast.id, rtVilla2.id, 'fiber', 'Drop Cable');
+      addCable(splitterEast.id, rtVilla3.id, 'fiber', 'Drop Cable');
+      addCable(splitterEast.id, rtVilla4.id, 'fiber', 'Drop Cable');
+
+      // Power Line (Red)
+      addCable(mdbPanel.id, upsCore.id, 'power', '220V');
+      addCable(upsCore.id, coreRouter.id, 'power', 'Backup AC');
+
+      deselectAll();
+      showToast('โหลดผังตัวอย่างรีสอร์ท & วิลล่าสำเร็จ!');
+    }
+
+    document.getElementById('btnLoadSample').addEventListener('click', loadSampleResortDiagram);
+
+    // Initialize application on window load
+    window.onload = function() {
+      // Set current date in slide footer
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0,10);
+      document.getElementById('slideDateText').innerText = `Date: ${dateStr}`;
+
+      // Automatically load sample diagram on first view
+      loadSampleResortDiagram();
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>
