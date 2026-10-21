@@ -680,6 +680,16 @@
               <span id="auth-logged-role" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">...</span>
             </div>
             <div id="auth-logged-name" class="text-lg font-bold text-white">...</div>
+            <div id="auth-logged-email" class="text-[11px] text-slate-400 hidden"></div>
+          </div>
+
+          <!-- ขอเป็นผู้สอน (เฉพาะโหมด Supabase และบัญชีที่ยังเป็นนักเรียน) — ฐานข้อมูลเป็นผู้ตรวจรหัส -->
+          <div id="claim-teacher-box" class="hidden p-3 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-2">
+            <div class="text-[11px] font-semibold text-purple-200">👨‍🏫 เป็นผู้สอน? กรอกรหัสที่ผู้ดูแลระบบให้ไว้</div>
+            <div class="flex gap-2">
+              <input id="claim-teacher-code" type="password" autocomplete="off" placeholder="รหัสผู้สอน" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500">
+              <button type="button" onclick="handleClaimTeacher()" class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer transition">ยืนยัน</button>
+            </div>
           </div>
 
           <div class="space-y-2 pt-1">
@@ -695,6 +705,21 @@
           </div>
         </div>
 
+        <!-- ตั้งรหัสผ่านใหม่ (แสดงเมื่อผู้ใช้กดลิงก์ "ลืมรหัสผ่าน" ในอีเมลแล้วกลับมาที่หน้านี้) -->
+        <form id="auth-recovery-view" onsubmit="handleRecoverySubmit(event)" class="hidden space-y-2.5">
+          <div class="p-3 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-200 text-xs">🔑 ยืนยันอีเมลสำเร็จ — ตั้งรหัสผ่านใหม่ของคุณด้านล่าง</div>
+          <div id="recovery-error-msg" class="hidden p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs"></div>
+          <div>
+            <label class="block text-slate-400 mb-1">รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร):</label>
+            <input id="recovery-password" type="password" minlength="8" autocomplete="new-password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">พิมพ์รหัสผ่านใหม่อีกครั้ง:</label>
+            <input id="recovery-password2" type="password" minlength="8" autocomplete="new-password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer transition">บันทึกรหัสผ่านใหม่</button>
+        </form>
+
         <!-- LOGIN / REGISTER VIEW -->
         <div id="auth-login-view" class="space-y-3">
           <div class="flex border-b border-slate-800">
@@ -703,22 +728,27 @@
           </div>
 
           <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs"></div>
+          <!-- ข้อความแจ้งสำเร็จ/ขั้นตอนต่อไป (เช่น ส่งอีเมลยืนยันแล้ว) พร้อมปุ่มช่วย "ส่งอีเมลอีกครั้ง" -->
+          <div id="auth-info-msg" class="hidden p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs space-y-1.5"></div>
 
           <!-- TAB: LOGIN -->
           <form id="auth-tab-login" onsubmit="handleLogin(event)" class="space-y-2.5">
             <div>
-              <label class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
+              <label id="login-id-label" class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
               <input id="login-username" type="text" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
             <div>
               <label class="block text-slate-400 mb-1">รหัสผ่าน (Password):</label>
               <input id="login-password" type="password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
-            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer transition">
+            <div id="forgot-password-row" class="hidden text-right">
+              <button type="button" onclick="handleForgotPassword()" class="text-[11px] text-cyan-300 hover:text-cyan-200 underline cursor-pointer">ลืมรหัสผ่าน? ส่งลิงก์ตั้งรหัสใหม่ทางอีเมล</button>
+            </div>
+            <button id="login-submit-btn" type="submit" class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer transition">
               เข้าสู่ระบบเซิร์ฟเวอร์
             </button>
 
-            <div class="pt-2 border-t border-slate-800 text-center">
+            <div id="demo-login-box" class="pt-2 border-t border-slate-800 text-center">
               <span class="text-[10px] text-slate-500">เข้าสู่ระบบด่วนด้วยบัญชี Demo:</span>
               <div class="flex gap-2 mt-1.5">
                 <button type="button" onclick="quickLoginDemo('teacher')" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] cursor-pointer">
@@ -738,14 +768,14 @@
               <input id="reg-displayname" type="text" placeholder="เช่น Alice Smith" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
             <div>
-              <label class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
+              <label id="reg-id-label" class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
               <input id="reg-username" type="text" placeholder="ตัวอักษรภาษาอังกฤษหรือตัวเลข" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
             <div>
               <label class="block text-slate-400 mb-1">รหัสผ่าน (Password):</label>
               <input id="reg-password" type="password" minlength="6" placeholder="อย่างน้อย 6 ตัวอักษร" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
-            <div>
+            <div id="reg-role-group">
               <label class="block text-slate-400 mb-1">บทบาท (Role):</label>
               <select id="reg-role" onchange="document.getElementById('reg-teacher-code-box').classList.toggle('hidden', this.value !== 'teacher')" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
                 <option value="student" selected>🧑‍🎓 นักเรียน (Student)</option>
@@ -835,7 +865,8 @@
   <script src="../shared/checker.js"></script>
   <script src="../shared/sanitize.js"></script>
   <!-- frontend -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- ตรึงเวอร์ชัน + SRI: หน้านี้จัดการล็อกอิน จึงไม่ควรโหลดสคริปต์ลอยตามเวอร์ชัน (@2) ที่เปลี่ยนเองได้ — ถ้าจะอัปเดต ต้องคำนวณ integrity ใหม่ -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
   <script src="js/api/supabase-config.js"></script>
   <script src="js/api/supabase.js"></script>
   <script src="js/api/storage.js"></script>

@@ -6,6 +6,36 @@
 
 const SUPABASE_USER_KEY = 'workflow_supabase_user_v1';
 
+// รหัสผ่านขั้นต่ำฝั่งหน้าเว็บ (ฝั่ง Supabase ตั้งค่าได้ที่ Authentication → Policies ควรตั้งให้ตรงหรือเข้มกว่า)
+const SUPABASE_MIN_PASSWORD = 8;
+const SUPABASE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// แปลงข้อผิดพลาดของ Supabase Auth เป็นข้อความภาษาไทยที่ผู้เรียนเข้าใจ (เก็บ error.code เดิมไว้ให้หน้าจอเลือกแสดงปุ่มช่วยเหลือ เช่น "ส่งอีเมลยืนยันอีกครั้ง")
+// ไม่แสดง message ดิบของ Supabase ตรงๆ เพราะเป็นภาษาอังกฤษและบางข้อความบอกรายละเอียดภายในมากเกินไป
+const SUPABASE_AUTH_ERRORS = {
+  invalid_credentials: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+  email_not_confirmed: 'ยังไม่ได้ยืนยันอีเมล — กรุณากดลิงก์ในอีเมลที่ส่งให้ตอนสมัคร (ถ้าไม่พบ กดส่งอีเมลยืนยันอีกครั้งได้)',
+  user_already_exists: 'อีเมลนี้สมัครไว้แล้ว — ลองเข้าสู่ระบบ หรือกด "ลืมรหัสผ่าน"',
+  email_exists: 'อีเมลนี้สมัครไว้แล้ว — ลองเข้าสู่ระบบ หรือกด "ลืมรหัสผ่าน"',
+  weak_password: 'รหัสผ่านง่ายเกินไป — ใช้ตัวอักษรผสมตัวเลข และยาวขึ้น',
+  same_password: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม',
+  email_address_invalid: 'รูปแบบอีเมลไม่ถูกต้อง',
+  validation_failed: 'ข้อมูลที่กรอกไม่ถูกต้อง กรุณาตรวจอีเมลและรหัสผ่านอีกครั้ง',
+  over_email_send_rate_limit: 'ส่งอีเมลถี่เกินไป กรุณารอสักครู่แล้วลองใหม่ (ระบบจำกัดจำนวนอีเมลต่อชั่วโมง)',
+  over_request_rate_limit: 'ลองถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
+  signup_disabled: 'ขณะนี้ปิดรับสมัครสมาชิกใหม่',
+  otp_expired: 'ลิงก์หมดอายุหรือถูกใช้ไปแล้ว — กรุณาขอลิงก์ใหม่',
+  session_not_found: 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่',
+  not_authenticated: 'กรุณาเข้าสู่ระบบก่อน'
+};
+
+function supabaseAuthError(error, fallback = 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบสมาชิก กรุณาลองใหม่') {
+  const code = (error && (error.code || error.error_code)) || '';
+  const err = new Error(SUPABASE_AUTH_ERRORS[code] || fallback);
+  err.code = code || 'unknown';
+  return err;
+}
+
 const SupabaseApi = {
   mode: 'supabase',
   _client: null,
@@ -19,6 +49,14 @@ const SupabaseApi = {
     }
     if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
       this._client = window.supabase.createClient(config.url, config.anonKey);
+      // กดลิงก์ "ลืมรหัสผ่าน" ในอีเมลแล้วกลับมาที่หน้านี้ → SDK ตั้ง session ชั่วคราวให้และส่งเหตุการณ์นี้ เพื่อให้หน้าจอเปิดฟอร์มตั้งรหัสผ่านใหม่
+      if (this._client.auth && typeof this._client.auth.onAuthStateChange === 'function') {
+        this._client.auth.onAuthStateChange((event) => {
+          if (event === 'PASSWORD_RECOVERY' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('supabase-password-recovery'));
+          }
+        });
+      }
       return this._client;
     }
     return null;
@@ -32,88 +70,118 @@ const SupabaseApi = {
     writeStore(SUPABASE_USER_KEY, user);
   },
 
-  // แปลง username ให้เป็นรูปแบบ email สำหรับ Supabase Auth ถ้าจำเป็น
-  formatAuthEmail(identifier) {
-    if (!identifier) return '';
-    return identifier.includes('@') ? identifier : `${identifier.trim().toLowerCase()}@workflow.lab`;
+  // ใช้อีเมลจริงเท่านั้น (ต้องรับอีเมลยืนยัน/รีเซ็ตรหัสผ่านได้) — ไม่แปลงชื่อผู้ใช้เป็นอีเมลปลอมอีกแล้ว
+  normalizeEmail(email) {
+    const value = String(email || '').trim().toLowerCase();
+    if (!SUPABASE_EMAIL_RE.test(value) || value.length > 254) {
+      const err = new Error('กรุณากรอกอีเมลให้ถูกต้อง เช่น name@example.com');
+      err.code = 'email_address_invalid';
+      throw err;
+    }
+    return value;
+  },
+
+  // ลิงก์ที่ Supabase จะพากลับมาหลังกดลิงก์ในอีเมล (ต้องอยู่ในรายการ Redirect URLs ของโปรเจกต์ ไม่งั้น Supabase จะใช้ Site URL แทน)
+  redirectUrl() {
+    return `${window.location.origin}${window.location.pathname}`;
   },
 
   // ---------------------------------------------------------
   // Auth Methods
   // ---------------------------------------------------------
-  async register(identifier, password, displayName, teacherCode = '') {
+  async register(email, password, displayName) {
     const client = this.getClient();
     if (!client) throw new Error('Supabase client is not loaded');
 
-    const email = this.formatAuthEmail(identifier);
-    const username = identifier.includes('@') ? identifier.split('@')[0] : identifier;
-    const role = (teacherCode && teacherCode === 'classroom-secret') ? 'teacher' : 'student';
+    const cleanEmail = this.normalizeEmail(email);
+    if (String(password || '').length < SUPABASE_MIN_PASSWORD) {
+      const err = new Error(`รหัสผ่านต้องยาวอย่างน้อย ${SUPABASE_MIN_PASSWORD} ตัวอักษร`);
+      err.code = 'weak_password';
+      throw err;
+    }
+    const shownName = String(displayName || '').trim().slice(0, 60) || cleanEmail.split('@')[0];
 
+    // ห้ามส่ง role ไปกับ metadata และห้ามตรวจรหัสผู้สอนฝั่งหน้าเว็บ: โค้ดฝั่งนี้ใครก็เปิดอ่าน/แก้ได้ และ public key ยิง Auth API ตรงได้
+    // ทุกบัญชีเริ่มเป็น student เสมอ (trigger ในฐานข้อมูลบังคับ) การเป็นผู้สอนต้องผ่าน claimTeacher() หลังล็อกอิน
     const { data, error } = await client.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
-        data: {
-          username,
-          display_name: displayName || username,
-          role
-        }
+        emailRedirectTo: this.redirectUrl(),
+        data: { username: cleanEmail.split('@')[0], display_name: shownName }
       }
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw supabaseAuthError(error, 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่');
 
-    const userObj = {
-      id: data.user?.id,
-      username,
-      displayName: displayName || username,
-      role
-    };
-
-    if (data.session) {
-      this.setCurrentUser(userObj);
+    // เปิด "Confirm email" ไว้: สมัครแล้วยังไม่มี session จนกว่าจะกดลิงก์ยืนยันในอีเมล
+    // ถ้าอีเมลนี้เคยสมัครแล้ว Supabase จะตอบเหมือนสมัครสำเร็จ (identities ว่าง) เพื่อไม่บอกว่าอีเมลไหนมีบัญชีอยู่ — เราตอบข้อความเดียวกันทั้งสองกรณี
+    if (!data.session) {
+      return { ok: true, needsConfirmation: true, email: cleanEmail, user: null, session: null };
     }
 
-    return {
-      ok: true,
-      user: userObj,
-      session: data.session
-    };
+    // กรณีโปรเจกต์ปิด Confirm email: ได้ session ทันที
+    const userObj = await this.getMe();
+    return { ok: true, needsConfirmation: false, email: cleanEmail, user: userObj, session: data.session };
   },
 
-  async login(identifier, password) {
+  async resendConfirmation(email) {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase client is not loaded');
+    const cleanEmail = this.normalizeEmail(email);
+    const { error } = await client.auth.resend({
+      type: 'signup',
+      email: cleanEmail,
+      options: { emailRedirectTo: this.redirectUrl() }
+    });
+    if (error) throw supabaseAuthError(error, 'ส่งอีเมลยืนยันไม่สำเร็จ กรุณาลองใหม่');
+    return { ok: true, email: cleanEmail };
+  },
+
+  // ขอลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล — ตอบเหมือนกันไม่ว่าอีเมลนั้นมีบัญชีหรือไม่ (ไม่บอกว่าอีเมลไหนสมัครไว้)
+  async requestPasswordReset(email) {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase client is not loaded');
+    const cleanEmail = this.normalizeEmail(email);
+    const { error } = await client.auth.resetPasswordForEmail(cleanEmail, { redirectTo: this.redirectUrl() });
+    if (error) throw supabaseAuthError(error, 'ขอลิงก์ตั้งรหัสผ่านใหม่ไม่สำเร็จ กรุณาลองใหม่');
+    return { ok: true, email: cleanEmail };
+  },
+
+  // ตั้งรหัสผ่านใหม่ (ใช้ได้เมื่อมี session — หลังกดลิงก์ในอีเมลรีเซ็ต หรือผู้ที่ล็อกอินอยู่แล้ว)
+  async updatePassword(newPassword) {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase client is not loaded');
+    if (String(newPassword || '').length < SUPABASE_MIN_PASSWORD) {
+      const err = new Error(`รหัสผ่านต้องยาวอย่างน้อย ${SUPABASE_MIN_PASSWORD} ตัวอักษร`);
+      err.code = 'weak_password';
+      throw err;
+    }
+    const { error } = await client.auth.updateUser({ password: newPassword });
+    if (error) throw supabaseAuthError(error, 'ตั้งรหัสผ่านใหม่ไม่สำเร็จ กรุณาขอลิงก์ใหม่แล้วลองอีกครั้ง');
+    return { ok: true };
+  },
+
+  // ขอเป็นผู้สอนด้วยรหัส — ฐานข้อมูลเป็นผู้ตรวจ (ฟังก์ชัน claim_teacher) และจำกัดการเดารหัส 5 ครั้ง/15 นาที
+  async claimTeacher(code) {
+    const client = this.getClient();
+    if (!client) throw new Error('Supabase client is not loaded');
+    const { data, error } = await client.rpc('claim_teacher', { code: String(code || '') });
+    if (error) throw supabaseAuthError(error, error.message || 'ยืนยันรหัสผู้สอนไม่สำเร็จ');
+    if (data === true) await this.getMe(); // โหลดบทบาทใหม่จากฐานข้อมูล
+    return data === true;
+  },
+
+  async login(email, password) {
     const client = this.getClient();
     if (!client) throw new Error('Supabase client is not loaded');
 
-    const email = this.formatAuthEmail(identifier);
-    const { data, error } = await client.auth.signInWithPassword({
-      email,
-      password
-    });
+    const cleanEmail = this.normalizeEmail(email);
+    const { data, error } = await client.auth.signInWithPassword({ email: cleanEmail, password });
+    if (error) throw supabaseAuthError(error, 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่');
 
-    if (error) throw new Error(error.message);
-
-    // ดึง profile เพิ่มเติม
-    let profile = null;
-    try {
-      const { data: profData } = await client
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-      profile = profData;
-    } catch (e) {}
-
-    const meta = data.user.user_metadata || {};
-    const userObj = {
-      id: data.user.id,
-      username: profile?.username || meta.username || email.split('@')[0],
-      displayName: profile?.display_name || meta.display_name || email.split('@')[0],
-      role: profile?.role || meta.role || 'student'
-    };
-
-    this.setCurrentUser(userObj);
-    return { ok: true, user: userObj, session: data.session };
+    const userObj = await this.getMe();
+    return { ok: true, user: userObj || null, session: data.session };
   },
 
   async logout() {
@@ -131,34 +199,14 @@ const SupabaseApi = {
     const client = this.getClient();
     if (!client) return null;
     try {
-      let { data: { user }, error } = await client.auth.getUser();
-      
-      // ถ้ายังไม่มี User ให้ล็อกอินเป็น Guest / Anonymous อัตโนมัติในเบื้องหลัง
-      if (!user) {
-        try {
-          const { data: anonData } = await client.auth.signInAnonymously();
-          if (anonData && anonData.user) {
-            user = anonData.user;
-          }
-        } catch (e) {
-          // ถ้า Supabase ยังไม่ได้เปิดฟังก์ชัน Anonymous sign-in ให้ fallback เป็น Guest ID ประจำเครื่อง
-        }
-      }
+      const { data: { user } } = await client.auth.getUser();
 
-      if (!user) {
-        let guestId = readStore('workflow_guest_id_v1', null);
-        if (!guestId) {
-          guestId = 'guest_' + Math.random().toString(36).substring(2, 10);
-          writeStore('workflow_guest_id_v1', guestId);
-        }
-        const guestUser = {
-          id: guestId,
-          username: 'guest',
-          displayName: 'ผู้เรียน (Guest)',
-          role: 'student'
-        };
-        this.setCurrentUser(guestUser);
-        return guestUser;
+      // ยังไม่ได้ล็อกอิน = ไม่มีผู้ใช้ (ใช้ข้อมูลในเครื่องแบบ Local ต่อไป ไม่เขียนขึ้นคลาวด์)
+      // เดิมสร้างบัญชี anonymous ให้อัตโนมัติ — เลิกแล้ว เพราะเราให้ผู้เรียนล็อกอินจริง
+      // และบัญชี anonymous ทุกบัญชีเป็นแถวใน auth.users ที่ใครก็สร้างรัวๆ ได้
+      if (!user || user.is_anonymous) {
+        this.setCurrentUser(null);
+        return null;
       }
 
       let profile = null;
@@ -172,11 +220,14 @@ const SupabaseApi = {
       } catch (e) {}
 
       const meta = user.user_metadata || {};
+      const fallbackName = user.email ? user.email.split('@')[0] : 'ผู้เรียน';
       const userObj = {
         id: user.id,
-        username: profile?.username || meta.username || (user.email ? user.email.split('@')[0] : 'guest'),
-        displayName: profile?.display_name || meta.display_name || (user.email ? user.email.split('@')[0] : 'ผู้เรียน (Guest)'),
-        role: profile?.role || meta.role || 'student'
+        email: user.email || '',
+        username: profile?.username || meta.username || fallbackName,
+        displayName: profile?.display_name || meta.display_name || fallbackName,
+        // บทบาทเชื่อเฉพาะค่าจากตาราง profiles (ฝั่งฐานข้อมูล) — metadata ผู้ใช้แก้เองได้จึงไม่ใช้ แม้ดึงโปรไฟล์ไม่สำเร็จก็เป็น student
+        role: profile?.role === 'teacher' || profile?.role === 'admin' ? profile.role : 'student'
       };
 
       this.setCurrentUser(userObj);
@@ -383,7 +434,8 @@ const SupabaseApi = {
   // ---------------------------------------------------------
   async getCustomLevels() {
     const client = this.getClient();
-    if (!client) return LocalApi.getCustomLevels();
+    // ยังไม่ล็อกอิน = ไม่แตะตารางบนคลาวด์ (anon ไม่มีสิทธิ์อยู่แล้ว) ใช้ด่านที่เก็บในเครื่องแทน
+    if (!client || !this.getCurrentUser()) return LocalApi.getCustomLevels();
 
     try {
       const { data, error } = await client
@@ -454,39 +506,34 @@ const SupabaseApi = {
       return RemoteApi.shareFlow(type, title, data);
     }
 
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { error } = await client.from('shares').insert({
-      code,
+    // รหัสแชร์ออกโดยฐานข้อมูล (trigger สุ่มแบบ CSPRNG) — ไม่สร้างฝั่งหน้าเว็บ (Math.random เดาได้) และไม่ยอมรับรหัสที่ client ส่งมา
+    const { data: row, error } = await client.from('shares').insert({
       user_id: user.id,
-      type,
-      title: title || 'แชร์ Workflow',
+      type: type === 'level' ? 'level' : 'project',
+      title: String(title || 'แชร์ Workflow').slice(0, 200),
       data_json: data
-    });
+    }).select('code').single();
 
     if (error) throw new Error(error.message);
-    return { ok: true, code, url: `${window.location.origin}${window.location.pathname}?share=${code}` };
+    return { ok: true, code: row.code, url: `${window.location.origin}${window.location.pathname}?share=${row.code}` };
   },
 
+  // อ่านทีละรหัสผ่านฟังก์ชัน get_share (ตารางไม่เปิดให้ list) คืนรูปแบบเดียวกับ RemoteApi.getShare ที่ checkIncomingShare ใช้
   async getShare(code) {
     const client = this.getClient();
     if (!client) return RemoteApi.getShare(code);
 
-    const { data, error } = await client
-      .from('shares')
-      .select('*')
-      .eq('code', code.toUpperCase())
-      .single();
-
-    if (error || !data) return { ok: false, error: 'ไม่พบรหัสแชร์นี้' };
+    const { data, error } = await client.rpc('get_share', { p_code: String(code || '') });
+    const row = Array.isArray(data) ? data[0] : null;
+    if (error || !row) return { ok: false, error: 'ไม่พบรหัสแชร์นี้' };
     return {
       ok: true,
-      share: {
-        code: data.code,
-        type: data.type,
-        title: data.title,
-        data: data.data_json,
-        createdAt: data.created_at
-      }
+      code: row.code,
+      type: row.type,
+      title: row.title,
+      author: row.author || 'ผู้ใช้ทั่วไป',
+      createdAt: row.created_at,
+      data: row.data_json
     };
   },
 

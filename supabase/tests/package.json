@@ -1,0 +1,7 @@
+{
+  "name": "workflow-lab-supabase-tests",
+  "private": true,
+  "description": "ทดสอบ migration/RLS ของ Supabase บน Postgres จริง (PGlite) — ใช้เฉพาะตอนพัฒนา ไม่เข้าไปในแอป",
+  "scripts": { "test": "node rls.test.js" },
+  "devDependencies": { "@electric-sql/pglite": "^0.5.11" }
+}

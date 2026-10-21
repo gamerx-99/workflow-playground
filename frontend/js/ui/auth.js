@@ -10,6 +10,7 @@ function getAuthActiveApi() {
 }
 
 async function initAuthAndBackendUi() {
+  handleAuthRedirectErrors(); // ลิงก์ในอีเมลหมดอายุ/ใช้แล้ว → แจ้งเป็นภาษาไทย
   const mode = getApiMode();
   if (mode === 'remote') {
     try {
@@ -73,14 +74,25 @@ function openAuthModal() {
   const api = getAuthActiveApi();
   const user = api.getCurrentUser ? api.getCurrentUser() : null;
 
+  document.getElementById('auth-recovery-view')?.classList.add('hidden');
   document.getElementById('auth-user-view').classList.toggle('hidden', !user);
   document.getElementById('auth-login-view').classList.toggle('hidden', !!user);
+  applyAuthFormsForMode();
+  hideAuthMessages();
 
   if (user) {
     document.getElementById('auth-logged-name').textContent = user.displayName || user.username;
     document.getElementById('auth-logged-role').textContent = user.role === 'teacher' ? '👨‍🏫 ผู้สอน (Teacher)' : '🧑‍🎓 นักเรียน (Student)';
     const teacherBtn = document.getElementById('auth-teacher-dash-btn');
     if (teacherBtn) teacherBtn.classList.toggle('hidden', user.role !== 'teacher');
+
+    const emailEl = document.getElementById('auth-logged-email');
+    if (emailEl) {
+      emailEl.textContent = user.email || '';
+      emailEl.classList.toggle('hidden', !user.email);
+    }
+    // ช่องกรอกรหัสผู้สอน: เฉพาะโหมด Supabase และบัญชีที่ยังเป็นนักเรียน
+    document.getElementById('claim-teacher-box')?.classList.toggle('hidden', !(isSupabaseAuthMode() && user.role !== 'teacher'));
   }
 
   // Radio button mode
@@ -110,17 +122,89 @@ function switchAuthTab(tab) {
     : 'flex-1 py-2 text-xs text-slate-400 hover:text-white font-medium';
 }
 
+// ---------------------------------------------------------
+// ฟอร์มล็อกอิน/สมัคร: โหมด Supabase ใช้ "อีเมลจริง + ยืนยันอีเมล + ลืมรหัสผ่านทางอีเมล"
+// โหมด Local/Remote (Node API) ยังใช้ชื่อผู้ใช้ตามเดิม
+// ---------------------------------------------------------
+let pendingConfirmEmail = ''; // อีเมลที่รอยืนยัน (ไว้ใช้กับปุ่ม "ส่งอีเมลยืนยันอีกครั้ง")
+
+function isSupabaseAuthMode() {
+  return getApiMode() === 'supabase' && typeof SupabaseApi !== 'undefined';
+}
+
+// ปรับป้ายชื่อ/ชนิดช่องกรอก/ปุ่มให้ตรงกับโหมดที่ใช้อยู่
+function applyAuthFormsForMode() {
+  const sb = isSupabaseAuthMode();
+  const setField = (id, labelId, labelText, type, placeholder, autocomplete) => {
+    const input = document.getElementById(id);
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = labelText;
+    if (input) {
+      input.type = type;
+      input.placeholder = placeholder;
+      input.autocomplete = autocomplete;
+    }
+  };
+
+  setField('login-username', 'login-id-label', sb ? 'อีเมล (Email):' : 'ชื่อผู้ใช้ (Username):', sb ? 'email' : 'text', sb ? 'name@example.com' : '', sb ? 'email' : 'username');
+  setField('reg-username', 'reg-id-label', sb ? 'อีเมล (Email) — ต้องเป็นอีเมลจริงที่รับข้อความได้:' : 'ชื่อผู้ใช้ (Username):', sb ? 'email' : 'text', sb ? 'name@example.com' : 'ตัวอักษรภาษาอังกฤษหรือตัวเลข', sb ? 'email' : 'username');
+
+  const regPass = document.getElementById('reg-password');
+  if (regPass) {
+    regPass.minLength = sb ? SUPABASE_MIN_PASSWORD : 6;
+    regPass.placeholder = `อย่างน้อย ${sb ? SUPABASE_MIN_PASSWORD : 6} ตัวอักษร`;
+    regPass.autocomplete = 'new-password';
+  }
+
+  // โหมด Supabase: ทุกคนสมัครเป็นนักเรียน แล้วค่อยกรอกรหัสผู้สอนหลังล็อกอิน (ที่หน้าบัญชี) — ซ่อนช่องบทบาท/รหัสผู้สอนในฟอร์มสมัคร
+  document.getElementById('reg-role-group')?.classList.toggle('hidden', sb);
+  document.getElementById('reg-teacher-code-box')?.classList.add('hidden');
+  const roleSel = document.getElementById('reg-role');
+  if (roleSel && sb) roleSel.value = 'student';
+
+  document.getElementById('forgot-password-row')?.classList.toggle('hidden', !sb);
+  document.getElementById('demo-login-box')?.classList.toggle('hidden', sb); // บัญชี Demo เป็นของ API Server เท่านั้น
+  const submit = document.getElementById('login-submit-btn');
+  if (submit) submit.textContent = sb ? 'เข้าสู่ระบบ' : 'เข้าสู่ระบบเซิร์ฟเวอร์';
+}
+
+function hideAuthMessages() {
+  document.getElementById('auth-error-msg')?.classList.add('hidden');
+  document.getElementById('auth-info-msg')?.classList.add('hidden');
+}
+
+// แสดงข้อความ (ใช้ textContent ทั้งหมด — ข้อความมาจากเซิร์ฟเวอร์/ผู้ใช้ จึงไม่ใส่ HTML)
+// opts.resendEmail: แนบปุ่ม "ส่งอีเมลยืนยันอีกครั้ง"
+function showAuthMessage(boxId, message, opts = {}) {
+  const other = document.getElementById(boxId === 'auth-error-msg' ? 'auth-info-msg' : 'auth-error-msg');
+  if (other) other.classList.add('hidden');
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  box.textContent = boxId === 'auth-error-msg' ? `❌ ${message}` : `✉️ ${message}`;
+  if (opts.resendEmail) {
+    pendingConfirmEmail = opts.resendEmail;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'ส่งอีเมลยืนยันอีกครั้ง';
+    btn.className = 'block mt-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold cursor-pointer';
+    btn.addEventListener('click', handleResendConfirmation);
+    box.appendChild(btn);
+  }
+  box.classList.remove('hidden');
+}
+const showAuthError = (message, opts) => showAuthMessage('auth-error-msg', message, opts);
+const showAuthInfo = (message, opts) => showAuthMessage('auth-info-msg', message, opts);
+
 async function handleLogin(e) {
   if (e) e.preventDefault();
   const userEl = document.getElementById('login-username');
   const passEl = document.getElementById('login-password');
-  const errEl = document.getElementById('auth-error-msg');
-  const mode = getApiMode();
 
   try {
-    errEl.classList.add('hidden');
-    if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') {
-      await SupabaseApi.login(userEl.value.trim(), passEl.value);
+    hideAuthMessages();
+    if (isSupabaseAuthMode()) {
+      const res = await SupabaseApi.login(userEl.value, passEl.value);
+      if (!res.user) throw new Error('เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่');
     } else {
       await RemoteApi.login(userEl.value.trim(), passEl.value);
       setApiMode('remote');
@@ -129,8 +213,7 @@ async function handleLogin(e) {
     alert('เข้าสู่ระบบสำเร็จเรียบร้อยแล้ว!');
     location.reload();
   } catch (err) {
-    errEl.textContent = `❌ ${err.message}`;
-    errEl.classList.remove('hidden');
+    showAuthError(err.message, err.code === 'email_not_confirmed' ? { resendEmail: userEl.value.trim() } : {});
   }
 }
 
@@ -140,26 +223,117 @@ async function handleRegister(e) {
   const passEl = document.getElementById('reg-password');
   const nameEl = document.getElementById('reg-displayname');
   const roleEl = document.getElementById('reg-role');
-  const errEl = document.getElementById('auth-error-msg');
-  const mode = getApiMode();
 
   try {
-    errEl.classList.add('hidden');
-    const teacherCode = roleEl.value === 'teacher' ? document.getElementById('reg-teacher-code').value : '';
-    if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') {
-      await SupabaseApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
-    } else {
-      await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
-      setApiMode('remote');
+    hideAuthMessages();
+    if (isSupabaseAuthMode()) {
+      const res = await SupabaseApi.register(userEl.value, passEl.value, nameEl.value);
+      if (res.needsConfirmation) {
+        // ยังไม่ถือว่าล็อกอิน: ต้องกดลิงก์ยืนยันในอีเมลก่อน (ข้อความเดียวกันไม่ว่าอีเมลนั้นเคยสมัครไว้หรือไม่)
+        passEl.value = '';
+        switchAuthTab('login');
+        document.getElementById('login-username').value = res.email;
+        showAuthInfo(`ถ้าอีเมล ${res.email} ใช้สมัครได้ เราส่งลิงก์ยืนยันไปให้แล้ว — เปิดอีเมล (ตรวจโฟลเดอร์สแปมด้วย) กดลิงก์ แล้วกลับมาเข้าสู่ระบบ`, { resendEmail: res.email });
+        return;
+      }
+      closeAuthModal();
+      alert('สมัครสมาชิกและเข้าสู่ระบบเรียบร้อยแล้ว!');
+      location.reload();
+      return;
     }
+
+    const teacherCode = roleEl.value === 'teacher' ? document.getElementById('reg-teacher-code').value : '';
+    await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
+    setApiMode('remote');
     closeAuthModal();
     alert('สมัครสมาชิกและเข้าสู่ระบบเรียบร้อยแล้ว!');
     location.reload();
   } catch (err) {
-    errEl.textContent = `❌ ${err.message}`;
-    errEl.classList.remove('hidden');
+    showAuthError(err.message);
   }
 }
+
+async function handleResendConfirmation() {
+  try {
+    await SupabaseApi.resendConfirmation(pendingConfirmEmail);
+    showAuthInfo(`ส่งอีเมลยืนยันไปที่ ${pendingConfirmEmail} อีกครั้งแล้ว (ถ้ายังไม่พบ รอสักครู่และตรวจโฟลเดอร์สแปม)`);
+  } catch (err) {
+    showAuthError(err.message);
+  }
+}
+
+// ลืมรหัสผ่าน: ส่งลิงก์ตั้งรหัสใหม่ไปที่อีเมลในช่องล็อกอิน — ตอบเหมือนกันไม่ว่าอีเมลนั้นมีบัญชีหรือไม่
+async function handleForgotPassword() {
+  const email = document.getElementById('login-username').value;
+  try {
+    hideAuthMessages();
+    if (!String(email).trim()) {
+      showAuthError('กรอกอีเมลของคุณในช่องด้านบนก่อน แล้วกด "ลืมรหัสผ่าน"');
+      return;
+    }
+    const res = await SupabaseApi.requestPasswordReset(email);
+    showAuthInfo(`ถ้า ${res.email} มีบัญชีอยู่ เราส่งลิงก์ตั้งรหัสผ่านใหม่ไปให้แล้ว — เปิดอีเมลแล้วกดลิงก์ (ลิงก์มีอายุจำกัด)`);
+  } catch (err) {
+    showAuthError(err.message);
+  }
+}
+
+// หลังกดลิงก์รีเซ็ตรหัสผ่านในอีเมล → เปิดหน้าตั้งรหัสผ่านใหม่
+function openRecoveryView() {
+  const modal = document.getElementById('auth-modal');
+  ['auth-user-view', 'auth-login-view'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+  document.getElementById('auth-recovery-view')?.classList.remove('hidden');
+  modal?.classList.remove('hidden');
+}
+
+async function handleRecoverySubmit(e) {
+  if (e) e.preventDefault();
+  const p1 = document.getElementById('recovery-password').value;
+  const p2 = document.getElementById('recovery-password2').value;
+  const errEl = document.getElementById('recovery-error-msg');
+  const fail = (msg) => { errEl.textContent = `❌ ${msg}`; errEl.classList.remove('hidden'); };
+  errEl.classList.add('hidden');
+
+  if (p1 !== p2) return fail('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+  try {
+    await SupabaseApi.updatePassword(p1);
+    history.replaceState(null, '', window.location.pathname); // ล้าง token ออกจาก URL
+    alert('ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว! คุณเข้าสู่ระบบอยู่');
+    location.reload();
+  } catch (err) {
+    fail(err.message);
+  }
+}
+
+// ผู้ที่ล็อกอินแล้วกรอกรหัสผู้สอน — ฐานข้อมูลตรวจรหัสและจำกัดการเดา (ไม่ตรวจรหัสในหน้าเว็บ)
+async function handleClaimTeacher() {
+  const input = document.getElementById('claim-teacher-code');
+  try {
+    const ok = await SupabaseApi.claimTeacher(input.value);
+    input.value = '';
+    if (ok) {
+      alert('ยืนยันรหัสสำเร็จ — บัญชีนี้เป็นผู้สอนแล้ว');
+      location.reload();
+    } else {
+      alert('รหัสผู้สอนไม่ถูกต้อง');
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// กดลิงก์ในอีเมลแล้วเจอปัญหา (ลิงก์หมดอายุ/ถูกใช้แล้ว) Supabase จะพากลับมาพร้อม error ใน URL — แปลเป็นข้อความไทยแล้วล้างออกจาก URL
+function handleAuthRedirectErrors() {
+  const params = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+  const query = new URLSearchParams(window.location.search || '');
+  const code = params.get('error_code') || query.get('error_code');
+  if (!code) return;
+  const message = SUPABASE_AUTH_ERRORS[code] || 'ลิงก์จากอีเมลใช้ไม่ได้ กรุณาขอลิงก์ใหม่';
+  history.replaceState(null, '', window.location.pathname);
+  setTimeout(() => alert(`⚠️ ${message}`), 400);
+}
+
+window.addEventListener('supabase-password-recovery', openRecoveryView);
 
 async function quickLoginDemo(role) {
   const userEl = document.getElementById('login-username');
@@ -188,6 +362,7 @@ async function handleLogout() {
 function handleBackendModeChange(newMode) {
   setApiMode(newMode);
   updateBackendStatusUi();
+  applyAuthFormsForMode(); // เปลี่ยนช่อง "ชื่อผู้ใช้" ↔ "อีเมล" ให้ตรงโหมดทันที
   if (newMode === 'supabase') {
     alert('สลับเป็นโหมด Supabase Cloud แล้ว (เชื่อมต่อฐานข้อมูลและ Auth บนคลาวด์)');
   } else if (newMode === 'remote') {

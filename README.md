@@ -113,6 +113,24 @@ node backend/api_server.js
 
 ชุดทดสอบ: `node tests/phase5b_backend_api.test.js` และ `node tests/phase5b_security.test.js`
 
+## Supabase (ล็อกอินด้วยอีเมลจริง) — ทางเลือก
+
+โหมดคลาวด์: ผู้เรียน **สมัครด้วยอีเมลจริง → กดลิงก์ยืนยันในอีเมล → เข้าสู่ระบบ** และรีเซ็ตรหัสผ่านทางอีเมลได้ (โหมดเครื่อง Local ไม่ต้องล็อกอินและยังใช้ได้เหมือนเดิม)
+
+1. รัน migration ตามลำดับใน `supabase/migrations/` บนโปรเจกต์ Supabase ของคุณ (SQL Editor หรือ `supabase db push`) — ไฟล์ `20261022000000_fix_auth_rls.sql` แก้ช่องโหว่สิทธิ์/RLS ของไฟล์แรก **ต้องรันก่อนเปิดใช้งานจริง**
+2. ตั้งรหัสสมัครผู้สอน (ไม่เก็บใน git): ดูคำสั่งท้ายไฟล์ migration ที่สอง
+3. ตั้งค่า Auth ใน Dashboard: Site URL / Redirect URLs, Confirm email = เปิด, Custom SMTP, Email Templates (รายละเอียดใน `docs/ROADMAP.md` หัวข้อ 7.0)
+4. ใส่ URL และ **publishable key** (เปิดเผยได้) ใน `frontend/js/api/supabase-config.js` — **ห้ามใส่ secret / service role key** ในโฟลเดอร์ `frontend/` เด็ดขาด
+5. เปิดหน้าเว็บ → กดป้ายสถานะด้านบนขวา → เลือก "โหมด Supabase"
+
+ทดสอบ (ไม่ต่อเครือข่าย ไม่สร้างบัญชีจริง):
+
+```bash
+node tests/supabase_auth_client.test.js          # ตรรกะล็อกอินฝั่งหน้าเว็บ (client จำลอง)
+cd supabase/tests && npm install && cd ../..    # ครั้งแรกเท่านั้น (ใช้ PGlite = Postgres ในโปรเซส)
+node supabase/tests/rls.test.js                  # migration + RLS บน Postgres จริง
+```
+
 ## ต่อ backend ภายหลัง
 
 เขียน object ที่มีเมธอดเดียวกับ `LocalApi` ใน `frontend/js/api/storage.js` (`getLevels`, `loadFlow`, `saveFlow`, `checkLevel`, `getProgress`) ที่เรียก `fetch()` แทน แล้วเปลี่ยน `const Api = ...` บรรทัดสุดท้าย ส่วน UI ไม่ต้องแก้
