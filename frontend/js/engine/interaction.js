@@ -32,6 +32,8 @@ function onNodeClick(e, nodeId) {
     lastFocusedFieldKey = def ? def.primaryField : null;
     renderCanvas();
     renderInspector();
+  } else if (!isBlockPopoverOpen()) {
+    renderInspector(); // บล็อกที่เลือกอยู่แล้วแต่ปิดหน้าต่างไป (Esc/✕) — คลิกอีกครั้งเพื่อเปิดใหม่
   }
 }
 
@@ -136,6 +138,7 @@ function onViewportMouseMove(e) {
       nodeEl.style.top = `${node.y}px`;
     }
     renderConnections();
+    positionBlockPopover(); // หน้าต่างตั้งค่าเลื่อนตามบล็อกที่กำลังลาก
   }
 
   if (activeWire) {

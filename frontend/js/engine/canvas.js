@@ -115,6 +115,7 @@ function renderCanvas() {
   }).join('');
 
   renderConnections();
+  positionBlockPopover(); // บล็อกถูกวาดใหม่ทั้งชุด — ให้หน้าต่างตั้งค่าตามไปอยู่ข้างบล็อกเดิม
 }
 
 function evaluateNodeVariableStatus(node, def) {

@@ -13,20 +13,16 @@ function setFocusedField(fieldKey) {
 function renderInspector() {
   const container = document.getElementById('inspector-content');
   if (!selectedNodeId) {
-    container.innerHTML = `
-      <div class="h-full flex flex-col items-center justify-center text-center text-slate-500 py-12">
-        <div class="text-3xl mb-2">👆</div>
-        <p class="text-xs font-medium text-slate-300">คลิกเลือกบล็อกบนกระดาน</p>
-        <p class="text-[11px] text-slate-500 mt-1 max-w-[230px]">
-          ระบบจะแสดงคำแนะนำว่าบล็อกนั้นต้องใช้ตัวแปรอะไร พร้อมปุ่มเติมตัวแปรอัตโนมัติครับ
-        </p>
-      </div>
-    `;
+    container.innerHTML = '';
+    closeBlockPopover(); // ไม่ได้เลือกบล็อก = ไม่มีหน้าต่างตั้งค่า
     return;
   }
 
   const node = nodes.find(n => n.id === selectedNodeId);
-  if (!node) return;
+  if (!node) {
+    closeBlockPopover();
+    return;
+  }
   const def = BLOCK_CATALOG.find(b => b.type === node.type);
   if (!lastFocusedFieldKey) {
     lastFocusedFieldKey = def.primaryField || (def.fields[0] ? def.fields[0].key : null);
@@ -147,6 +143,8 @@ function renderInspector() {
       ` : ''}
     </div>
   `;
+
+  openBlockPopover(); // แสดงหน้าต่างตั้งค่าข้างบล็อกที่เลือก (ดู ui/popover.js)
 }
 
 function applySmartPreset(nodeId) {

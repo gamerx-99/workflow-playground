@@ -5,10 +5,6 @@ function toggleLeftPanel() {
   document.getElementById('left-sidebar').classList.toggle('hidden');
 }
 
-function toggleRightPanel() {
-  document.getElementById('right-sidebar').classList.toggle('hidden');
-}
-
 function toggleMobileNav() {
   const nav = document.getElementById('mobile-nav');
   if (nav) nav.classList.toggle('hidden');
@@ -78,6 +74,7 @@ function applyZoom() {
   sizer.style.height = `${CANVAS_WORLD_HEIGHT * canvasZoom}px`;
   document.getElementById('zoom-label').textContent = `${Math.round(canvasZoom * 100)}%`;
   renderConnections();
+  positionBlockPopover();
 }
 
 // ย้ายกลุ่มบล็อกทั้งชุดให้อยู่กึ่งกลางของกระดาน (รักษาตำแหน่งสัมพัทธ์ระหว่างบล็อกไว้เหมือนเดิม)
@@ -123,14 +120,16 @@ function toggleCursorHighlight() {
   showCursorRing = !showCursorRing;
   const btn = document.getElementById('cursor-toggle-btn');
   const ring = document.getElementById('custom-cursor-ring');
+  const base = 'tip rounded-lg w-8 h-7 text-xs font-medium shadow-lg transition cursor-pointer flex items-center justify-center';
   if (showCursorRing) {
-    btn.textContent = '🎯 เป้าชี้เมาส์: เปิดอยู่';
-    btn.className = 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 rounded-lg px-2.5 py-1 text-xs font-medium shadow-lg hover:bg-cyan-500/30 transition cursor-pointer';
+    btn.setAttribute('data-tip', 'เป้าชี้เมาส์: เปิดอยู่\nวงแหวนช่วยให้เห็นตำแหน่งเมาส์บนกระดานชัดขึ้น (คลิกเพื่อปิด)');
+    btn.className = `${base} bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30`;
   } else {
-    btn.textContent = '🎯 เป้าชี้เมาส์: ปิด';
-    btn.className = 'bg-slate-800 border border-slate-700 text-slate-400 rounded-lg px-2.5 py-1 text-xs font-medium shadow-lg hover:bg-slate-700 transition cursor-pointer';
+    btn.setAttribute('data-tip', 'เป้าชี้เมาส์: ปิดอยู่\nคลิกเพื่อเปิดวงแหวนชี้ตำแหน่งเมาส์');
+    btn.className = `${base} bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700`;
     ring.style.display = 'none';
   }
+  btn.setAttribute('data-tip-edge', 'left');
 }
 
 function hideCustomCursor() {

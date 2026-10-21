@@ -38,47 +38,36 @@ async function renderStudioHeaderControls() {
   const projects = await Api.listProjects();
   const activeId = currentStudioProject ? currentStudioProject.id : projects[0].id;
 
+  // ปุ่มทั้งหมดเป็นไอคอนล้วน (ประหยัดพื้นที่ ไม่ตกลงมาเป็นแถวที่สอง) ชี้เมาส์/โฟกัสแล้วมีรายละเอียดเด้งออกมา (class "tip")
+  const iconBtn = (onclick, icon, label, tip, extra = '') => `
+    <button type="button" onclick="${onclick}" aria-label="${label}" data-tip="${label}&#10;${tip}"
+      class="tip w-8 h-8 rounded-lg border text-sm flex items-center justify-center cursor-pointer transition shrink-0 ${extra || 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}">${icon}</button>`;
+
   container.innerHTML = `
-    <div class="flex items-center gap-1.5 flex-wrap">
+    <div class="flex items-center gap-1.5 flex-nowrap">
       <!-- Project Selector -->
       <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-        <span class="text-[11px] text-slate-400 pl-1.5">📁 โปรเจกต์:</span>
-        <select onchange="onStudioProjectChange(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-medium focus:outline-none focus:border-indigo-500 cursor-pointer">
-          ${projects.map(p => `
-            <option value="${p.id}" ${p.id === activeId ? 'selected' : ''}>
-              ${escapeHtml(p.name)}
-            </option>
-          `).join('')}
-        </select>
-        <button onclick="promptCreateNewProject()" title="สร้างโปรเจกต์ใหม่" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer transition">
-          ➕
-        </button>
-        <button onclick="promptRenameProject()" title="เปลี่ยนชื่อโปรเจกต์" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer transition">
-          ✏️
-        </button>
-        <button onclick="promptDeleteProject()" title="ลบโปรเจกต์นี้" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 flex items-center justify-center text-xs cursor-pointer transition">
-          🗑️
-        </button>
+        <span class="tip flex" data-tip="เลือกโปรเจกต์&#10;สลับระหว่างงานออกแบบที่บันทึกไว้"><!-- select วาด ::after ไม่ได้ จึงห่อด้วย span -->
+          <select onchange="onStudioProjectChange(this.value)" aria-label="เลือกโปรเจกต์" class="bg-slate-900 border border-slate-700 rounded-lg px-2 h-8 text-xs text-white font-medium focus:outline-none focus:border-indigo-500 cursor-pointer w-[130px] xl:w-[170px] truncate">
+            ${projects.map(p => `
+              <option value="${p.id}" ${p.id === activeId ? 'selected' : ''}>${escapeHtml(p.name)}</option>
+            `).join('')}
+          </select>
+        </span>
+        ${iconBtn('promptCreateNewProject()', '➕', 'โปรเจกต์ใหม่', 'สร้างโปรเจกต์เปล่าอีกอัน')}
+        ${iconBtn('promptRenameProject()', '✏️', 'เปลี่ยนชื่อ', 'เปลี่ยนชื่อโปรเจกต์ที่เปิดอยู่')}
+        ${iconBtn('promptDeleteProject()', '🗑️', 'ลบโปรเจกต์', 'ลบโปรเจกต์ที่เปิดอยู่ (กู้คืนไม่ได้)', 'bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 border-slate-700')}
       </div>
 
       <!-- Quick Action Buttons -->
       <div class="flex items-center gap-1">
-        <button onclick="saveStudioProjectNow()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
-          <span>💾 บันทึก</span>
-          <span id="studio-save-indicator" class="text-[10px] text-emerald-400">✓</span>
+        <button type="button" onclick="saveStudioProjectNow()" aria-label="บันทึก" data-tip="บันทึก&#10;บันทึกโปรเจกต์ทันที (ระบบบันทึกให้เองอัตโนมัติอยู่แล้ว) ✓ = บันทึกแล้ว" class="tip h-8 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm flex items-center gap-1 cursor-pointer transition shrink-0">
+          <span>💾</span><span id="studio-save-indicator" class="text-[10px] text-emerald-400">✓</span>
         </button>
-        <button onclick="openExportFlowModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
-          <span>📤 ส่งออก JSON</span>
-        </button>
-        <button onclick="openImportFlowModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
-          <span>📥 นำเข้า JSON</span>
-        </button>
-        <button onclick="openShareStudioModal()" title="แชร์ Flow นี้ผ่านลิงก์" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
-          <span>🔗 แชร์ลิงก์</span>
-        </button>
-        <button onclick="openCreateLevelWizard()" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition">
-          <span>🎓 สร้างด่านแบบฝึกหัด</span>
-        </button>
+        ${iconBtn('openExportFlowModal()', '📤', 'ส่งออก JSON', 'คัดลอก/ดาวน์โหลด flow นี้เป็นไฟล์ .json')}
+        ${iconBtn('openImportFlowModal()', '📥', 'นำเข้า JSON', 'วางข้อความหรือเลือกไฟล์ .json ขึ้นกระดาน')}
+        ${iconBtn('openShareStudioModal()', '🔗', 'แชร์ลิงก์', 'สร้างลิงก์ให้คนอื่นเปิด flow นี้ได้ (ต้องล็อกอิน)', 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700')}
+        ${iconBtn('openCreateLevelWizard()', '🎓', 'สร้างด่านแบบฝึกหัด', 'เอา flow นี้เป็นเฉลย แล้วระบบสร้างโจทย์และเกณฑ์ตรวจให้', 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border-purple-500/50 shadow-lg shadow-purple-600/30')}
       </div>
     </div>
   `;

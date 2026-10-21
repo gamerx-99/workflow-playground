@@ -27,6 +27,23 @@ async function initAuthAndBackendUi() {
   checkIncomingShare();
 }
 
+// ป้ายสถานะโหมดการเชื่อมต่อ/ผู้ใช้ — แสดงแบบกะทัดรัด (ไอคอน + ชื่อสั้น) ชี้เมาส์แล้วมีรายละเอียดเด้งออกมา
+function backendBadgeHtml({ icon, label, tip, tone }) {
+  const tones = {
+    ok: 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60',
+    info: 'bg-cyan-950/50 border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50',
+    warn: 'bg-amber-950/50 border-amber-500/30 text-amber-300 hover:bg-amber-900/50',
+    local: 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+  };
+  return `
+    <button type="button" onclick="openAuthModal()" aria-label="${escapeHtml(tip.split('\n')[0])}" data-tip="${escapeHtml(tip)}" data-tip-edge="right"
+      class="tip h-8 px-2.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition whitespace-nowrap ${tones[tone]}">
+      <span>${icon}</span>
+      ${label ? `<span class="hidden xl:inline truncate max-w-[110px]">${escapeHtml(label)}</span>` : ''}
+    </button>
+  `;
+}
+
 function updateBackendStatusUi() {
   const badge = document.getElementById('backend-status-badge');
   if (!badge) return;
@@ -34,43 +51,19 @@ function updateBackendStatusUi() {
   const mode = getApiMode();
   const api = getAuthActiveApi();
   const user = api.getCurrentUser ? api.getCurrentUser() : null;
+  const name = user ? (user.displayName || user.username) : '';
+  const isTeacher = !!user && user.role === 'teacher';
 
   if (mode === 'supabase' && user) {
-    const isTeacher = user.role === 'teacher';
-    badge.innerHTML = `
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium cursor-pointer hover:bg-emerald-900/60 transition" onclick="openAuthModal()">
-        <span>☁️</span>
-        <span class="truncate max-w-[120px]">${escapeHtml(user.displayName || user.username)}</span>
-        <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-200">${isTeacher ? 'ผู้สอน (Supabase)' : 'Supabase Cloud'}</span>
-      </div>
-    `;
+    badge.innerHTML = backendBadgeHtml({ icon: '☁️', label: name, tone: 'ok', tip: `${name}${isTeacher ? ' (ผู้สอน)' : ''}\nเชื่อมต่อ Supabase Cloud แล้ว\nคลิกเพื่อดูบัญชี / สลับโหมด` });
   } else if (mode === 'supabase') {
-    badge.innerHTML = `
-      <div class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-950/50 border border-cyan-500/30 text-cyan-300 text-xs font-medium cursor-pointer hover:bg-cyan-900/50 transition" onclick="openAuthModal()">
-        <span>☁️</span> <span>Supabase (ยังไม่ล็อกอิน)</span>
-      </div>
-    `;
+    badge.innerHTML = backendBadgeHtml({ icon: '☁️', label: 'ยังไม่ล็อกอิน', tone: 'info', tip: 'Supabase — ยังไม่ล็อกอิน\nคลิกเพื่อล็อกอิน / สมัครสมาชิก' });
   } else if (mode === 'remote' && user) {
-    const isTeacher = user.role === 'teacher';
-    badge.innerHTML = `
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium cursor-pointer hover:bg-emerald-900/60 transition" onclick="openAuthModal()">
-        <span>${isTeacher ? '👨‍🏫' : '🧑‍🎓'}</span>
-        <span class="truncate max-w-[120px]">${escapeHtml(user.displayName || user.username)}</span>
-        <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-200">${isTeacher ? 'ผู้สอน' : 'ออนไลน์'}</span>
-      </div>
-    `;
+    badge.innerHTML = backendBadgeHtml({ icon: isTeacher ? '👨‍🏫' : '🧑‍🎓', label: name, tone: 'ok', tip: `${name} (${isTeacher ? 'ผู้สอน' : 'นักเรียน'})\nเชื่อมต่อ API Server แล้ว\nคลิกเพื่อดูบัญชี / สลับโหมด` });
   } else if (mode === 'remote') {
-    badge.innerHTML = `
-      <div class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-950/50 border border-amber-500/30 text-amber-300 text-xs font-medium cursor-pointer hover:bg-amber-900/50 transition" onclick="openAuthModal()">
-        <span>🌐</span> <span>Server (ยังไม่ล็อกอิน)</span>
-      </div>
-    `;
+    badge.innerHTML = backendBadgeHtml({ icon: '🌐', label: 'ยังไม่ล็อกอิน', tone: 'warn', tip: 'API Server — ยังไม่ล็อกอิน\nคลิกเพื่อล็อกอิน / สมัครสมาชิก' });
   } else {
-    badge.innerHTML = `
-      <div class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium cursor-pointer hover:bg-slate-700 transition" onclick="openAuthModal()" title="คลิกเพื่อสลับโหมดเซิร์ฟเวอร์ หรือล็อกอิน">
-        <span>💻</span> <span class="hidden md:inline">โหมดเครื่อง (Local)</span>
-      </div>
-    `;
+    badge.innerHTML = backendBadgeHtml({ icon: '💻', label: 'โหมดเครื่อง', tone: 'local', tip: 'โหมดเครื่อง (Local)\nข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น\nคลิกเพื่อล็อกอิน / สลับไปใช้เซิร์ฟเวอร์' });
   }
 }
 

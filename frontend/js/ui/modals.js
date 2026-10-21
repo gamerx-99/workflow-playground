@@ -51,11 +51,25 @@ async function submitLevelCheck() {
   }
   const result = await Api.checkLevel(currentLevelId, { nodes, connections });
   showCheckResult(result);
-  renderSidebarCheckResults(result);
+}
+
+// ตัวเลขคะแนนล่าสุดบนปุ่มส่งตรวจ (ผลละเอียดแจ้งเป็นหน้าต่างหลังส่งตรวจอยู่แล้ว จึงไม่ต้องมีแผง "ผลตรวจ" แยก)
+function updateSubmitResultChip(result) {
+  const chip = document.getElementById('submit-result-chip');
+  if (!chip) return;
+  if (!result) {
+    chip.classList.add('hidden');
+    return;
+  }
+  chip.textContent = `${result.score}/${result.total}`;
+  chip.classList.remove('hidden');
+  chip.classList.toggle('text-emerald-200', !!result.passed);
+  chip.classList.toggle('text-amber-200', !result.passed);
 }
 
 function showCheckResult(result) {
   lastCheckResult = result;
+  updateSubmitResultChip(result);
   if (result.passed && !passedLevelIds.includes(currentLevelId)) {
     passedLevelIds.push(currentLevelId);
     renderLevelTabs();

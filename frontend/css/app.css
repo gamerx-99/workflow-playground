@@ -124,12 +124,86 @@ html, body, #workspace-viewport, #canvas-world {
     z-index: 40;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8);
   }
-  #right-sidebar {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 40;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8);
-  }
+}
+
+/* tooltip ที่ซ่อนอยู่ (::after) ยังนับเป็นเนื้อหาที่ล้นหน้าจอได้ ทำให้ body ถูกเลื่อนไปด้านข้างเองหลายสิบพิกเซล
+   overflow: clip ห้ามการเลื่อนทุกแบบ (รวมถึงที่สั่งด้วยโปรแกรม/โฟกัส) ต่างจาก hidden */
+html, body {
+  overflow: clip !important;
+}
+
+/* ================= TOOLTIP: ชี้เมาส์/โฟกัสที่ปุ่มแล้วมีรายละเอียดเด้งออกมา =================
+   ใช้กับองค์ประกอบใดก็ได้ที่ใส่ class="tip" และ data-tip="ชื่อ&#10;รายละเอียด" (&#10; = ขึ้นบรรทัดใหม่)
+   ตำแหน่ง: data-tip-pos="bottom" (ค่าเริ่มต้น) | "top"
+   แนวนอน:  data-tip-edge="left" | "right" ใช้กับปุ่มชิดขอบจอ ไม่ให้ tooltip ล้นออกนอกหน้าจอ */
+.tip {
+  position: relative;
+}
+.tip::after {
+  content: attr(data-tip);
+  white-space: pre-line;
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-2px);
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #020617;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+  z-index: 100;
+}
+.tip[data-tip-pos="top"]::after {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(2px);
+}
+.tip[data-tip-edge="right"]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+.tip[data-tip-edge="left"]::after {
+  left: 0;
+  transform: translateY(-2px);
+}
+.tip:hover::after,
+.tip:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0.25s; /* หน่วงนิดหน่อย กัน tooltip วูบวาบเวลาเลื่อนเมาส์ผ่าน */
+}
+.tip:hover::after,
+.tip:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+.tip[data-tip-edge="right"]:hover::after,
+.tip[data-tip-edge="right"]:focus-visible::after,
+.tip[data-tip-edge="left"]:hover::after,
+.tip[data-tip-edge="left"]:focus-visible::after {
+  transform: translateY(0);
+}
+
+/* ================= BLOCK POPOVER: หน้าต่างตั้งค่าบล็อกที่เด้งขึ้นข้างบล็อกที่คลิก ================= */
+#block-popover {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(99, 102, 241, 0.35);
+  animation: popoverIn 0.14s ease-out;
+}
+@keyframes popoverIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+#block-popover-header {
+  touch-action: none;
 }

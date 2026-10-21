@@ -30,7 +30,6 @@ let lastCheckResult = null; // ผลส่งตรวจล่าสุด (�
 const attemptsByLevel = {}; // จำนวนครั้งที่ส่งตรวจแล้วยังไม่ผ่าน ต่อด่าน
 
 let leftSidebarTab = 'mission'; // 'mission' | 'palette'
-let rightSidebarTab = 'inspector'; // 'inspector' | 'results'
 let activeRevealedHintSteps = {}; // จำว่าด่านนี้เปิดคำใบ้ถึงขั้นไหนแล้ว { [levelId]: 1 | 2 | 3 }
 
 const MODE_LABELS = {
@@ -118,6 +117,7 @@ async function switchView(mode, optLevelId = null) {
   const missionBar = document.getElementById('mission-bar');
 
   if (mode === 'home') {
+    closeBlockPopover();
     if (homeView) homeView.classList.remove('hidden');
     if (workspaceView) workspaceView.classList.add('hidden');
     await renderHomeView();
@@ -142,6 +142,7 @@ async function switchView(mode, optLevelId = null) {
     if (missionBar) missionBar.classList.add('hidden');
 
     renderPalette();
+    switchLeftSidebarTab('palette'); // Studio ไม่มีโจทย์ — เปิดคลังบล็อกให้เลย (เดิมแผงซ้ายว่างเปล่า)
     await loadStudioProject();
   }
 
@@ -193,6 +194,7 @@ async function loadLevelState(levelId) {
   renderLeftSidebarMissionTab(levelObj);
 
   lastRun = null;
+  if (typeof updateSubmitResultChip === 'function') updateSubmitResultChip(null); // เปลี่ยนด่าน = ล้างคะแนนของด่านก่อนหน้า
 
   const saved = await Api.loadFlow(levelId);
   const initial = levelObj.start ? JSON.parse(JSON.stringify(levelObj.start)) : { nodes: [], connections: [] };
@@ -217,18 +219,22 @@ function updateTemplateButtonState(levelObj) {
   const isStartMode = !!levelObj.start;
   const unlocked = isSolutionUnlocked(levelObj.id);
 
+  // ปุ่มเป็นไอคอนล้วน (class "tip" ใน index.html) — รายละเอียดแสดงเป็น tooltip ตอนชี้เมาส์
+  const base = 'tip w-8 h-8 rounded-lg border text-sm transition cursor-pointer flex items-center justify-center';
+  const setBtn = (icon, label, tip, colors) => {
+    btn.textContent = icon;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('data-tip', `${label}\n${tip}`);
+    btn.setAttribute('data-tip-edge', 'right');
+    btn.className = `${base} ${colors}`;
+  };
+
   if (isStartMode) {
-    btn.innerHTML = '<span>↺ เริ่มโจทย์ใหม่</span>';
-    btn.title = 'รีเซ็ตกระดานกลับไปยังโจทย์เริ่มต้น';
-    btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition cursor-pointer';
+    setBtn('↺', 'เริ่มโจทย์ใหม่', 'รีเซ็ตกระดานกลับไปยังโจทย์เริ่มต้น', 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700');
   } else if (unlocked) {
-    btn.innerHTML = '<span>✨ วางเฉลยตัวอย่าง</span>';
-    btn.title = 'วาง Flow ตัวอย่างที่เป็นเฉลยของด่านนี้ (ปลดล็อกแล้ว)';
-    btn.className = 'px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-medium transition cursor-pointer';
+    setBtn('✨', 'วางเฉลยตัวอย่าง', 'วาง flow เฉลยของด่านนี้ลงกระดาน (ปลดล็อกแล้ว)', 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40');
   } else {
-    btn.innerHTML = '<span>🔒 ดูเฉลย</span>';
-    btn.title = 'ปลดล็อกหลังจากกดส่งตรวจด่านนี้อย่างน้อย 1 ครั้ง';
-    btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700 text-xs transition cursor-pointer';
+    setBtn('🔒', 'ดูเฉลย (ล็อกอยู่)', 'ปลดล็อกหลังกดส่งตรวจด่านนี้อย่างน้อย 1 ครั้ง', 'bg-slate-800/80 text-slate-400 border-slate-700');
   }
 }
 
@@ -369,86 +375,6 @@ function toggleHintStep(levelId, step) {
   renderLeftSidebarMissionTab(levelObj);
 }
 
-// ---------------------------------------------------------
-// RIGHT SIDEBAR TABS: INSPECTOR & CHECK RESULTS
-// ---------------------------------------------------------
-function switchRightSidebarTab(tab) {
-  rightSidebarTab = tab;
-  const inspectorTabBtn = document.getElementById('tab-btn-inspector');
-  const resultsTabBtn = document.getElementById('tab-btn-results');
-  const inspectorSection = document.getElementById('inspector-content');
-  const resultsSection = document.getElementById('sidebar-check-results');
-
-  const activeCls = 'border-b-2 border-cyan-500 text-white font-bold bg-slate-900/60';
-  const inactiveCls = 'text-slate-400 hover:text-slate-200 font-medium';
-
-  if (inspectorTabBtn) inspectorTabBtn.className = `flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${tab === 'inspector' ? activeCls : inactiveCls}`;
-  if (resultsTabBtn) resultsTabBtn.className = `flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${tab === 'results' ? activeCls : inactiveCls}`;
-
-  if (inspectorSection) inspectorSection.classList.toggle('hidden', tab !== 'inspector');
-  if (resultsSection) resultsSection.classList.toggle('hidden', tab !== 'results');
-}
-
-function renderSidebarCheckResults(result) {
-  const container = document.getElementById('sidebar-check-results');
-  if (!container) return;
-
-  if (!result) {
-    container.innerHTML = `
-      <div class="h-full flex flex-col items-center justify-center text-center text-slate-500 py-12 px-4">
-        <div class="text-3xl mb-2">📋</div>
-        <p class="text-xs font-medium text-slate-300">ยังไม่มีผลการตรวจล่าสุด</p>
-        <p class="text-[11px] text-slate-500 mt-1 max-w-[220px]">
-          กดปุ่ม <b>"✅ ส่งตรวจด่านนี้"</b> ด้านบนเพื่อประเมินคะแนนและความถูกต้องครับ
-        </p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="p-3.5 space-y-3 text-xs">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">${result.passed ? '🎉' : '🧐'}</span>
-          <div>
-            <h4 class="font-bold ${result.passed ? 'text-emerald-300' : 'text-white'} text-xs">
-              ${result.passed ? 'ผ่านด่านนี้แล้ว!' : 'ยังไม่ผ่าน — เหลืออีกนิดเดียว'}
-            </h4>
-            <span class="text-[10px] text-slate-400">ผ่าน ${result.score}/${result.total} ข้อ</span>
-          </div>
-        </div>
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${result.passed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
-          ${result.total ? Math.round(result.score / result.total * 100) : 0}%
-        </span>
-      </div>
-
-      <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-        <div class="h-full ${result.passed ? 'bg-emerald-500' : 'bg-amber-400'}" style="width: ${result.total ? Math.round(result.score / result.total * 100) : 0}%"></div>
-      </div>
-
-      <div class="space-y-1.5 pt-1 max-h-[50vh] overflow-y-auto">
-        ${result.items.map(item => `
-          <div class="p-2 rounded-xl border ${item.ok ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-rose-950/30 border-rose-500/40'} flex items-start gap-2">
-            <span class="shrink-0 text-xs">${item.ok ? '✅' : '❌'}</span>
-            <div class="space-y-0.5">
-              <div class="font-medium text-[11px] ${item.ok ? 'text-emerald-200' : 'text-white'}">${escapeHtml(item.label)}</div>
-              ${item.ok ? '' : `<div class="text-[10px] text-rose-300">${escapeHtml(item.detail)}</div>`}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-
-      ${!result.passed ? `
-        <div class="pt-2 border-t border-slate-800">
-          <button onclick="askCoach()" class="w-full py-2 px-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition">
-            <span>🧑‍🏫 ขอคำแนะนำจาก AI Coach</span>
-          </button>
-        </div>
-      ` : ''}
-    </div>
-  `;
-}
 
 // ---------------------------------------------------------
 // LEVEL NAVIGATION
