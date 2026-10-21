@@ -41,12 +41,17 @@ function closeVarCheckModal() {
 }
 
 async function submitLevelCheck() {
-  const level = LEVELS.find(l => l.id === currentLevelId);
+  const allLevels = await Api.getLevels();
+  const level = allLevels.find(l => String(l.id) === String(currentLevelId));
+  if (!level) return;
+
   if (level.mode === 'predict') {
     openPredictModal(level);
     return;
   }
-  showCheckResult(await Api.checkLevel(currentLevelId, { nodes, connections }));
+  const result = await Api.checkLevel(currentLevelId, { nodes, connections });
+  showCheckResult(result);
+  renderSidebarCheckResults(result);
 }
 
 function showCheckResult(result) {
@@ -55,8 +60,14 @@ function showCheckResult(result) {
     passedLevelIds.push(currentLevelId);
     renderLevelTabs();
   }
-  if (!result.passed) attemptsByLevel[currentLevelId] = (attemptsByLevel[currentLevelId] || 0) + 1;
-  document.getElementById('coach-btn').classList.toggle('hidden', result.passed);
+  attemptsByLevel[currentLevelId] = (attemptsByLevel[currentLevelId] || 0) + 1;
+
+  // ปลดล็อกปุ่มดูเฉลยทันทีหลังส่งตรวจ
+  const levelObj = LEVELS.find(l => l.id === currentLevelId) || { id: currentLevelId };
+  updateTemplateButtonState(levelObj);
+
+  const coachBtn = document.getElementById('coach-btn');
+  if (coachBtn) coachBtn.classList.toggle('hidden', result.passed);
 
   document.getElementById('level-check-header').innerHTML = `
     <div class="flex items-center gap-2.5">
@@ -104,12 +115,16 @@ const COACH_FALLBACK_TEXT = {
 async function askCoach() {
   const box = document.getElementById('coach-box');
   const btn = document.getElementById('coach-btn');
-  box.classList.remove('hidden');
-  box.innerHTML = '<div class="p-3 rounded-xl bg-violet-950/40 border border-violet-500/30 text-violet-200 animate-pulse">🧑‍🏫 โค้ชกำลังดู flow ของคุณ...</div>';
-  btn.disabled = true;
+  if (box) {
+    box.classList.remove('hidden');
+    box.innerHTML = '<div class="p-3 rounded-xl bg-violet-950/40 border border-violet-500/30 text-violet-200 animate-pulse">🧑‍🏫 โค้ชกำลังดู flow ของคุณ...</div>';
+  }
+  if (btn) btn.disabled = true;
 
   const out = await Api.coach(currentLevelId, { nodes, connections }, lastCheckResult, attemptsByLevel[currentLevelId] || 1);
-  btn.disabled = false;
+  if (btn) btn.disabled = false;
+
+  if (!box) return;
 
   if (!out.ok) {
     box.innerHTML = `<div class="p-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-300">${escapeHtml(COACH_FALLBACK_TEXT[out.reason] || COACH_FALLBACK_TEXT.failed)}</div>`;
@@ -132,11 +147,18 @@ function closeLevelCheckModal() {
 }
 
 function toggleHint() {
+  // สลับเปิดแผงซ้ายไปยังแท็บโจทย์ & คำใบ้ด้วย
+  const leftSidebar = document.getElementById('left-sidebar');
+  if (leftSidebar && leftSidebar.classList.contains('hidden')) {
+    leftSidebar.classList.remove('hidden');
+  }
+  switchLeftSidebarTab('mission');
   document.getElementById('hint-banner').classList.toggle('hidden');
 }
 
-function loadTemplateForCurrentLevel() {
-  const levelObj = LEVELS.find(l => l.id === currentLevelId);
+async function loadTemplateForCurrentLevel() {
+  const allLevels = await Api.getLevels();
+  const levelObj = allLevels.find(l => String(l.id) === String(currentLevelId));
   const source = levelObj && (levelObj.start || levelObj.template);
   if (!source) return;
 
@@ -148,6 +170,7 @@ function loadTemplateForCurrentLevel() {
   saveCurrentLevelToStorage();
   renderCanvas();
   renderInspector();
+  centerCanvasView();
 }
 
 function clearCanvasConfirm() {
@@ -158,6 +181,7 @@ function clearCanvasConfirm() {
   saveCurrentLevelToStorage();
   renderCanvas();
   renderInspector();
+  centerCanvasView();
 }
 
 function openGuideModal() {
@@ -168,7 +192,7 @@ function closeGuideModal() {
 }
 
 function openExportModal() {
-  const levelObj = LEVELS.find(l => l.id === currentLevelId);
+  const levelObj = LEVELS.find(l => l.id === currentLevelId) || { id: currentLevelId, title: 'Workflow' };
   const lines = [];
   lines.push(`=== 📋 ส่งตรวจแบบฝึกหัด Workflow Automation ===`);
   lines.push(`🎯 ด่านที่ทำ: ด่านที่ ${levelObj.id} - ${levelObj.title}`);

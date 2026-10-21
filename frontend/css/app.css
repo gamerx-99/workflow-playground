@@ -113,3 +113,23 @@ html, body, #workspace-viewport, #canvas-world {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ================= RESPONSIVE ADJUSTMENTS ================= */
+@media (max-width: 768px) {
+  #left-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8);
+  }
+  #right-sidebar {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8);
+  }
+}

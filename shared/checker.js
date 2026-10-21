@@ -61,7 +61,7 @@ function deriveChecks(level, catalog) {
     const from = tpl.nodes.find(n => n.id === c.fromNode);
     const to = tpl.nodes.find(n => n.id === c.toNode);
     const def = catalog.find(b => b.type === from.type);
-    const port = def.outputs.length > 1 ? c.fromPort : undefined;
+    const port = (def && def.outputs.length > 1) ? c.fromPort : undefined;
     const key = `${from.type}|${port}|${to.type}`;
     if (seenLinks.has(key)) return;
     seenLinks.add(key);
@@ -71,6 +71,7 @@ function deriveChecks(level, catalog) {
   Object.entries(byType).forEach(([type, list]) => {
     if (type.startsWith('trigger_')) return;
     const def = catalog.find(b => b.type === type);
+    if (!def) return;
     def.fields.filter(f => f.type !== 'select').forEach(f => {
       const sets = list.map(n => new Set(varsIn(n.config && n.config[f.key])));
       const common = [...sets[0]].filter(v => sets.every(s => s.has(v)));

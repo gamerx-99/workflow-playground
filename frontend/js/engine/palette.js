@@ -71,11 +71,12 @@ function addNodeToCanvas(blockType, x, y) {
   const def = BLOCK_CATALOG.find(b => b.type === blockType);
   if (!def) return;
 
-  const vp = document.getElementById('workspace-viewport');
   if (x === undefined || y === undefined) {
+    // วางที่กลางจอที่กำลังมองอยู่ แล้วเยื้องลงมาทีละนิดเพื่อไม่ให้ทับกัน (กลุ่มบล็อกยังอยู่กลางจอ)
+    const center = viewCenterInWorld();
     const offset = (nodes.length % 7) * 32;
-    x = Math.round((vp.scrollLeft + 100) / canvasZoom) + offset;
-    y = Math.round((vp.scrollTop + 120) / canvasZoom) + offset;
+    x = Math.max(16, Math.min(2720, Math.round(center.x - 125 - 96 + offset)));
+    y = Math.max(16, Math.min(1850, Math.round(center.y - 65 - 96 + offset)));
   }
 
   const newNode = {

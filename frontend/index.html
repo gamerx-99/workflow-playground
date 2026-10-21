@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Workflow Automation Lab — รุ่นฝึกจับคู่ตัวแปร (Smart Variable Edition)</title>
+  <title>Workflow Automation Lab — ที่ฝึก & ที่ออกแบบระบบ Automation (Phase 4)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="css/app.css" rel="stylesheet">
@@ -13,193 +13,459 @@
   <!-- วงแหวนชี้เมาส์ชัดเจนใน Workspace -->
   <div id="custom-cursor-ring"></div>
 
-  <!-- ================= TOP HEADER ================= -->
+  <!-- ================= TOP HEADER (RESPONSIVE NAVBAR) ================= -->
   <header class="h-14 bg-slate-900/95 border-b border-slate-800 px-3 flex items-center justify-between shrink-0 z-30">
-    <div class="flex items-center gap-2">
-      <button onclick="toggleLeftPanel()" title="พับ/เปิดคลังบล็อกด้านซ้าย" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1.5 cursor-pointer">
-        <span>⇤ คลังบล็อก</span>
-      </button>
-
-      <div class="flex items-center gap-2.5 ml-1">
-        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-md shadow-indigo-500/20 font-bold text-slate-950 text-base">
+    
+    <!-- LEFT: BRAND & VIEW SWITCHER -->
+    <div class="flex items-center gap-3">
+      <!-- Brand Logo -->
+      <div onclick="switchView('home')" class="flex items-center gap-2 cursor-pointer group">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-md shadow-indigo-500/20 font-bold text-slate-950 text-base group-hover:scale-105 transition">
           ⚡
         </div>
-        <div class="hidden sm:block">
+        <div class="hidden xl:block">
           <div class="flex items-center gap-1.5">
-            <h1 class="font-bold text-sm tracking-tight text-white">Workflow Automation Lab</h1>
-            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">SMART VARIABLE HELPER</span>
+            <h1 class="font-bold text-sm tracking-tight text-white group-hover:text-indigo-300 transition">Workflow Lab</h1>
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Phase 4</span>
           </div>
-          <p class="text-[11px] text-slate-400">มีระบบช่วยแนะนำตัวแปร + เช็คความถูกต้องของตัวแปรในแต่ละบล็อก</p>
         </div>
       </div>
+
+      <!-- Main Navigation Tabs (Desktop) -->
+      <nav class="hidden sm:flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <button id="nav-tab-home" onclick="switchView('home')" class="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer">
+          <span>🏠</span> <span>หน้าแรก</span>
+        </button>
+        <button id="nav-tab-practice" onclick="switchView('practice')" class="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer">
+          <span>🎯</span> <span>โหมดฝึก</span>
+        </button>
+        <button id="nav-tab-studio" onclick="switchView('studio')" class="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer">
+          <span>🎨</span> <span>สตูดิโอออกแบบ</span>
+        </button>
+      </nav>
     </div>
 
-    <!-- Level Selector Pills -->
-    <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800" id="level-tabs"></div>
+    <!-- CENTER: CONTEXT CONTROLS (PRACTICE OR STUDIO) -->
+    <div class="flex items-center gap-2">
+      <!-- Practice Mode Controls -->
+      <div id="practice-controls" class="flex items-center gap-2">
+        <button onclick="toggleLeftPanel()" title="พับ/เปิดแผงซ้าย" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1.5 cursor-pointer">
+          <span>⇤ แผงโจทย์/บล็อก</span>
+        </button>
 
-    <!-- Action Buttons -->
+        <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800" id="level-tabs"></div>
+      </div>
+
+      <!-- Studio Mode Controls -->
+      <div id="studio-controls" class="hidden"></div>
+    </div>
+
+    <!-- RIGHT: GLOBAL ACTIONS & MOBILE MENU -->
     <div class="flex items-center gap-1.5">
-      <button onclick="checkVariablesInFlow()" class="px-2.5 py-1.5 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 text-xs font-semibold flex items-center gap-1 transition cursor-pointer">
-        <span>🎯 ตรวจการใช้ตัวแปร</span>
+      <button onclick="openTour()" title="แนะนำการใช้งานระบบ" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium hidden md:flex items-center gap-1 cursor-pointer transition">
+        <span>❓ ทัวร์</span>
       </button>
-      <button onclick="openGuideModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1 transition cursor-pointer">
-        <span>📖 คู่มือตัวแปร</span>
+
+      <button onclick="checkVariablesInFlow()" title="ตรวจความถูกต้องของตัวแปรใน flow" class="px-2.5 py-1.5 rounded-lg bg-cyan-600/25 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 text-xs font-semibold hidden lg:flex items-center gap-1 transition cursor-pointer">
+        <span>🎯 ตัวแปร</span>
       </button>
-      <button onclick="openExportModal()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition cursor-pointer">
-        <span>📋 คัดลอกส่งตรวจ</span>
+
+      <button onclick="openGuideModal()" title="ดูคู่มือโพยตัวแปร" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium hidden lg:flex items-center gap-1 transition cursor-pointer">
+        <span>📖 โพย</span>
       </button>
+
+      <button onclick="openExportModal()" title="คัดลอกรายละเอียด flow เพื่อส่งตรวจ" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 hidden sm:flex items-center gap-1.5 transition cursor-pointer">
+        <span>📋 ส่งตรวจ</span>
+      </button>
+
       <button onclick="toggleRightPanel()" title="พับ/เปิดแผงตั้งค่าด้านขวา" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer">
         <span>ตั้งค่า ⇥</span>
+      </button>
+
+      <!-- Mobile Hamburger Menu Button -->
+      <button onclick="toggleMobileNav()" class="sm:hidden px-2 py-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 text-sm cursor-pointer">
+        ☰
       </button>
     </div>
   </header>
 
-  <!-- ================= MISSION BAR ================= -->
-  <div class="bg-slate-900/90 border-b border-slate-800/80 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 z-20">
-    <div class="flex items-center gap-2.5 flex-1 min-w-[280px]">
-      <span id="level-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-        ด่านที่ 1
-      </span>
-      <span id="level-mode" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0"></span>
-      <div class="truncate">
-        <span id="mission-title" class="font-semibold text-xs text-white mr-2">กำลังโหลดโจทย์...</span>
-        <span id="mission-desc" class="text-xs text-slate-400">...</span>
-      </div>
+  <!-- Mobile Dropdown Navigation -->
+  <div id="mobile-nav" class="hidden sm:hidden bg-slate-900 border-b border-slate-800 p-3 space-y-2 z-40">
+    <div class="grid grid-cols-3 gap-2">
+      <button id="mobile-nav-tab-home" onclick="switchView('home'); toggleMobileNav();" class="p-2 rounded-xl text-xs flex flex-col items-center justify-center gap-1">
+        <span>🏠</span> <span>หน้าแรก</span>
+      </button>
+      <button id="mobile-nav-tab-practice" onclick="switchView('practice'); toggleMobileNav();" class="p-2 rounded-xl text-xs flex flex-col items-center justify-center gap-1">
+        <span>🎯</span> <span>ฝึกฝน</span>
+      </button>
+      <button id="mobile-nav-tab-studio" onclick="switchView('studio'); toggleMobileNav();" class="p-2 rounded-xl text-xs flex flex-col items-center justify-center gap-1">
+        <span>🎨</span> <span>สตูดิโอ</span>
+      </button>
     </div>
-    <div class="flex items-center gap-1.5 shrink-0">
-      <button onclick="openRunModal()" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow shadow-sky-600/30 transition cursor-pointer">
-        ▶ จำลองการทำงาน
-      </button>
-      <button onclick="submitLevelCheck()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow shadow-emerald-600/30 transition cursor-pointer">
-        ✅ ส่งตรวจด่านนี้
-      </button>
-      <button onclick="toggleHint()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer">
-        💡 คำใบ้ + ตัวแปรที่ต้องใช้
-      </button>
-      <button id="template-btn" onclick="loadTemplateForCurrentLevel()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition cursor-pointer">
-        ✨ วางโครงตัวอย่าง
-      </button>
-      <button onclick="clearCanvasConfirm()" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs transition cursor-pointer">
-        🗑️ ล้างกระดาน
-      </button>
+    <div class="pt-2 border-t border-slate-800 flex gap-2">
+      <button onclick="openTour(); toggleMobileNav();" class="flex-1 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">❓ ทัวร์แนะนำ</button>
+      <button onclick="openGuideModal(); toggleMobileNav();" class="flex-1 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">📖 โพยตัวแปร</button>
+      <button onclick="checkVariablesInFlow(); toggleMobileNav();" class="flex-1 py-1.5 rounded-lg bg-cyan-900/40 text-xs text-cyan-300">🎯 ตรวจตัวแปร</button>
     </div>
   </div>
 
-  <!-- Hint Collapsible Box -->
-  <div id="hint-banner" class="hidden bg-amber-950/70 border-b border-amber-500/30 px-5 py-2 text-xs text-amber-200 flex items-center justify-between shrink-0 z-20">
-    <div id="hint-content" class="leading-relaxed"></div>
-    <button onclick="toggleHint()" class="text-amber-400 hover:text-amber-200 ml-4 font-bold cursor-pointer">✕ ปิด</button>
-  </div>
+  <!-- ================= VIEW 1: HOME DASHBOARD ================= -->
+  <div id="view-home" class="flex-1 overflow-y-auto bg-slate-950 hidden"></div>
 
-  <!-- ================= MAIN WORKSPACE AREA ================= -->
-  <div class="flex-1 flex overflow-hidden relative">
+  <!-- ================= VIEW 2: WORKSPACE (PRACTICE & STUDIO) ================= -->
+  <div id="view-workspace" class="flex-1 flex flex-col overflow-hidden relative">
 
-    <!-- LEFT SIDEBAR: NODE PALETTE -->
-    <aside id="left-sidebar" class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-200">
-      <div class="p-2.5 border-b border-slate-800 space-y-2">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">📦 คลังบล็อก (16 ชนิด)</h3>
-          <span class="text-[10px] text-slate-500">คลิกหรือลากวาง</span>
+    <!-- MISSION BAR (PRACTICE MODE ONLY) -->
+    <div id="mission-bar" class="bg-slate-900/90 border-b border-slate-800/80 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 z-20 overflow-x-auto">
+      <div class="flex items-center gap-2.5 flex-1 min-w-[260px]">
+        <span id="level-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+          ด่านที่ 1
+        </span>
+        <span id="level-mode" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0"></span>
+        <div class="truncate">
+          <span id="mission-title" class="font-semibold text-xs text-white mr-2">กำลังโหลดโจทย์...</span>
+          <span id="mission-desc" class="text-xs text-slate-400">...</span>
         </div>
-        <input id="palette-search" type="text" oninput="renderPalette()" placeholder="🔍 ค้นหาบล็อก เช่น LINE, AI, IF..." 
-          class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
       </div>
-
-      <div class="flex-1 overflow-y-auto p-2.5 space-y-3" id="palette-container"></div>
-
-      <div class="p-2.5 bg-slate-950/90 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
-        <div class="font-semibold text-cyan-300">✨ ทริคใส่ตัวแปรแบบแม่นยำ:</div>
-        <div>1. คลิกเลือกบล็อกบนกระดาน</div>
-        <div>2. กดปุ่ม <b>"⚡ เติมตัวแปรแนะนำอัตโนมัติ"</b> ที่แถบด้านขวา หรือคลิกช่องที่ต้องการแล้วกดปุ่มตัวแปรได้เลย!</div>
-      </div>
-    </aside>
-
-    <!-- CENTER: LARGE SCROLLABLE & ZOOMABLE CANVAS -->
-    <main id="workspace-viewport" class="flex-1 relative overflow-auto bg-slate-950"
-          onmousedown="onViewportMouseDown(event)"
-          onmousemove="onViewportMouseMove(event)"
-          onmouseup="onViewportMouseUp(event)"
-          onmouseleave="hideCustomCursor()">
-
-      <!-- Floating Top-Left Toolbar -->
-      <div class="sticky top-3 left-3 z-30 inline-flex flex-wrap items-center gap-2 ml-3 mt-3 pointer-events-auto">
-        <div class="bg-slate-900/95 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-300 flex items-center gap-2 shadow-lg">
-          <span id="canvas-stats">บล็อก: 0 | เส้นเชื่อม: 0</span>
-          <span class="text-slate-600">|</span>
-          <span id="mouse-coords" class="font-mono-code text-[11px] text-cyan-400">X: 0, Y: 0</span>
-        </div>
-
-        <div class="bg-slate-900/95 backdrop-blur border border-slate-700/80 rounded-lg p-0.5 flex items-center gap-0.5 shadow-lg">
-          <button onclick="changeZoom(-0.1)" class="px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 rounded cursor-pointer">➖</button>
-          <span id="zoom-label" onclick="resetZoom()" class="px-2 text-[11px] font-mono-code text-slate-200 cursor-pointer hover:text-indigo-400">100%</span>
-          <button onclick="changeZoom(0.1)" class="px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 rounded cursor-pointer">➕</button>
-          <button onclick="centerCanvasView()" class="px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800 rounded border-l border-slate-800 cursor-pointer">🎯 จัดกลาง</button>
-        </div>
-
-        <button id="cursor-toggle-btn" onclick="toggleCursorHighlight()" class="bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 rounded-lg px-2.5 py-1 text-xs font-medium shadow-lg hover:bg-cyan-500/30 transition cursor-pointer">
-          🎯 เป้าชี้เมาส์: เปิดอยู่
+      <div class="flex items-center gap-1.5 shrink-0 flex-nowrap">
+        <button onclick="openRunModal()" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow shadow-sky-600/30 transition cursor-pointer whitespace-nowrap">
+          ▶ จำลองการทำงาน
         </button>
-
-        <div id="wiring-indicator" class="hidden bg-indigo-600/95 text-white rounded-lg px-3 py-1 text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse">
-          <span>🔗 กำลังลากสาย... คลิกจุด Input (● ซ้าย) ของบล็อกปลายทาง (กด ESC เพื่อยกเลิก)</span>
-        </div>
+        <button onclick="submitLevelCheck()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow shadow-emerald-600/30 transition cursor-pointer whitespace-nowrap">
+          ✅ ส่งตรวจด่านนี้
+        </button>
+        <button onclick="toggleHint()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer whitespace-nowrap">
+          💡 คำใบ้
+        </button>
+        <button id="template-btn" onclick="handleTemplateBtnClick()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition cursor-pointer whitespace-nowrap">
+          ✨ วางโครงตัวอย่าง
+        </button>
+        <button onclick="clearCanvasConfirm()" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs transition cursor-pointer whitespace-nowrap">
+          🗑️ ล้างกระดาน
+        </button>
       </div>
+    </div>
 
-      <!-- The Giant 3000x2000 World Canvas -->
-      <div id="canvas-world" class="canvas-grid relative origin-top-left"
-           style="width: 3000px; height: 2000px;"
-           ondragover="onCanvasDragOver(event)"
-           ondrop="onCanvasDrop(event)">
+    <!-- Hint Collapsible Banner -->
+    <div id="hint-banner" class="hidden bg-amber-950/70 border-b border-amber-500/30 px-5 py-2 text-xs text-amber-200 flex items-center justify-between shrink-0 z-20">
+      <div id="hint-content" class="leading-relaxed"></div>
+      <button onclick="toggleHint()" class="text-amber-400 hover:text-amber-200 ml-4 font-bold cursor-pointer">✕ ปิด</button>
+    </div>
 
-        <svg id="connections-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10">
-          <defs>
-            <marker id="arrow-default" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#818cf8" />
-            </marker>
-            <marker id="arrow-true" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#34d399" />
-            </marker>
-            <marker id="arrow-false" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fb7185" />
-            </marker>
-            <marker id="arrow-route" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fbbf24" />
-            </marker>
-          </defs>
-          <g id="connections-layer"></g>
-          <path id="temp-wire" class="hidden" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="6 4" />
-        </svg>
+    <!-- WORKSPACE BODY WITH TWO SIDEBARS & CANVAS -->
+    <div class="flex-1 flex overflow-hidden relative">
 
-        <!-- Empty State Overlay -->
-        <div id="canvas-empty-hint" class="absolute top-[240px] left-[380px] flex flex-col items-center justify-center pointer-events-none text-center p-6">
-          <div class="w-14 h-14 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-center text-2xl mb-3 shadow-inner">
-            🧩
+      <!-- LEFT SIDEBAR: MISSION TAB & NODE PALETTE -->
+      <aside id="left-sidebar" class="w-72 sm:w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-200">
+        <!-- Sidebar Tabs Header -->
+        <div class="flex items-center border-b border-slate-800 bg-slate-950/60 shrink-0">
+          <button id="tab-btn-mission" onclick="switchLeftSidebarTab('mission')" class="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border-b-2 border-indigo-500 text-white font-bold bg-slate-900/60">
+            <span>📋 โจทย์ & คำใบ้</span>
+          </button>
+          <button id="tab-btn-palette" onclick="switchLeftSidebarTab('palette')" class="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer text-slate-400 hover:text-slate-200 font-medium">
+            <span>📦 คลังบล็อก (16)</span>
+          </button>
+        </div>
+
+        <!-- Section 1: Mission & Progressive Hints -->
+        <div id="mission-sidebar-content" class="flex-1 overflow-y-auto"></div>
+
+        <!-- Section 2: Node Palette (16 blocks) -->
+        <div id="palette-sidebar-content" class="flex-1 flex flex-col overflow-hidden hidden">
+          <div class="p-2.5 border-b border-slate-800 space-y-2 shrink-0">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">📦 คลังบล็อก</h3>
+              <span class="text-[10px] text-slate-500">คลิกหรือลากวาง</span>
+            </div>
+            <input id="palette-search" type="text" oninput="renderPalette()" placeholder="🔍 ค้นหา เช่น LINE, AI, IF..." 
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
           </div>
-          <p class="text-slate-300 font-semibold text-sm">วางบล็อกตามลำดับที่คุณถนัดได้เลย!</p>
-          <p class="text-slate-500 text-xs mt-1 max-w-md">
-            ส่วนเรื่องตัวแปร ไม่ต้องกังวล — ในแถบด้านขวามีปุ่ม <b>"⚡ เติมตัวแปรแนะนำให้อัตโนมัติ"</b> และคำอธิบายภาษาไทยกำกับทุกตัวครับ
-          </p>
+
+          <div class="flex-1 overflow-y-auto p-2.5 space-y-3" id="palette-container"></div>
+
+          <div class="p-2.5 bg-slate-950/90 border-t border-slate-800 text-[11px] text-slate-400 space-y-1 shrink-0">
+            <div class="font-semibold text-cyan-300">✨ ทริคด่วน:</div>
+            <div>คลิกบล็อกแล้วกด <b>"⚡ เติมตัวแปรแนะนำ"</b> ในแผงขวาได้เลย</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER: CANVAS VIEWPORT -->
+      <main id="workspace-viewport" class="flex-1 relative overflow-auto bg-slate-950"
+            onmousedown="onViewportMouseDown(event)"
+            onmousemove="onViewportMouseMove(event)"
+            onmouseup="onViewportMouseUp(event)"
+            onmouseleave="hideCustomCursor()">
+
+        <!-- Floating Top Toolbar -->
+        <div class="sticky top-3 left-3 z-30 inline-flex flex-wrap items-center gap-2 ml-3 mt-3 pointer-events-auto">
+          <div class="bg-slate-900/95 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-300 flex items-center gap-2 shadow-lg">
+            <span id="canvas-stats">บล็อก: 0 | เส้นเชื่อม: 0</span>
+            <span class="text-slate-600">|</span>
+            <span id="mouse-coords" class="font-mono-code text-[11px] text-cyan-400">X: 0, Y: 0</span>
+          </div>
+
+          <div class="bg-slate-900/95 backdrop-blur border border-slate-700/80 rounded-lg p-0.5 flex items-center gap-0.5 shadow-lg">
+            <button onclick="changeZoom(-0.1)" class="px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 rounded cursor-pointer">➖</button>
+            <span id="zoom-label" onclick="resetZoom()" class="px-2 text-[11px] font-mono-code text-slate-200 cursor-pointer hover:text-indigo-400">100%</span>
+            <button onclick="changeZoom(0.1)" class="px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 rounded cursor-pointer">➕</button>
+            <button onclick="centerCanvasViewByButton()" class="px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800 rounded border-l border-slate-800 cursor-pointer">🎯 จัดกลาง</button>
+          </div>
+
+          <button id="cursor-toggle-btn" onclick="toggleCursorHighlight()" class="bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 rounded-lg px-2.5 py-1 text-xs font-medium shadow-lg hover:bg-cyan-500/30 transition cursor-pointer">
+            🎯 เป้าชี้เมาส์: เปิดอยู่
+          </button>
+
+          <div id="wiring-indicator" class="hidden bg-indigo-600/95 text-white rounded-lg px-3 py-1 text-xs font-medium shadow-lg flex items-center gap-2 animate-pulse">
+            <span>🔗 กำลังลากสาย... คลิกจุด Input (● ซ้าย) ของบล็อกปลายทาง (กด ESC เพื่อยกเลิก)</span>
+          </div>
         </div>
 
-        <div id="nodes-layer" class="absolute inset-0 z-20 pointer-events-none"></div>
-      </div>
-    </main>
+        <!-- The Giant 3000x2000 World Canvas -->
+        <div id="canvas-sizer" class="overflow-hidden" style="width: 3000px; height: 2000px;">
+        <div id="canvas-world" class="canvas-grid relative origin-top-left"
+             style="width: 3000px; height: 2000px;"
+             ondragover="onCanvasDragOver(event)"
+             ondrop="onCanvasDrop(event)">
 
-    <!-- RIGHT SIDEBAR: SMART NODE INSPECTOR & VARIABLE ASSISTANT -->
-    <aside id="right-sidebar" class="w-88 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-200" style="width: 340px;">
-      <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-        <div>
-          <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400">⚙️ ตั้งค่าบล็อก & ตัวช่วยตัวแปร</h3>
-          <p class="text-[11px] text-slate-400 mt-0.5">คลิกช่องที่ต้องการ แล้วกดปุ่มตัวแปรเพื่อแทรกได้ทันที</p>
+          <svg id="connections-svg" class="absolute inset-0 w-full h-full pointer-events-none z-10">
+            <defs>
+              <marker id="arrow-default" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#818cf8" />
+              </marker>
+              <marker id="arrow-true" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#34d399" />
+              </marker>
+              <marker id="arrow-false" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fb7185" />
+              </marker>
+              <marker id="arrow-route" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#fbbf24" />
+              </marker>
+            </defs>
+            <g id="connections-layer"></g>
+            <path id="temp-wire" class="hidden" fill="none" stroke="#38bdf8" stroke-width="3" stroke-dasharray="6 4" />
+          </svg>
+
+          <!-- Empty State Overlay -->
+          <div id="canvas-empty-hint" class="absolute flex flex-col items-center justify-center pointer-events-none text-center p-6" style="left: 1500px; top: 1000px; transform: translate(-50%, -50%); width: 480px;">
+            <div class="w-14 h-14 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-center text-2xl mb-3 shadow-inner">
+              🧩
+            </div>
+            <p class="text-slate-300 font-semibold text-sm">วางบล็อกตามลำดับที่คุณต้องการได้เลย!</p>
+            <p class="text-slate-500 text-xs mt-1 max-w-md">
+              คลิกหรือลากบล็อกจากแผงด้านซ้ายมาวางบนกระดาน แล้วเชื่อมต่อสายเพื่อสร้างระบบอัตโนมัติครับ
+            </p>
+          </div>
+
+          <div id="nodes-layer" class="absolute inset-0 z-20 pointer-events-none"></div>
         </div>
-      </div>
+        </div>
+      </main>
 
-      <div id="inspector-content" class="flex-1 overflow-y-auto p-3.5"></div>
-    </aside>
+      <!-- RIGHT SIDEBAR: INSPECTOR & CHECK RESULTS TABS -->
+      <aside id="right-sidebar" class="w-80 sm:w-88 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 z-20 transition-all duration-200" style="width: 340px;">
+        <!-- Right Sidebar Tabs Header -->
+        <div class="flex items-center border-b border-slate-800 bg-slate-950/60 shrink-0">
+          <button id="tab-btn-inspector" onclick="switchRightSidebarTab('inspector')" class="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border-b-2 border-cyan-500 text-white font-bold bg-slate-900/60">
+            <span>⚙️ ตั้งค่าบล็อก</span>
+          </button>
+          <button id="tab-btn-results" onclick="switchRightSidebarTab('results')" class="flex-1 py-2 text-xs flex items-center justify-center gap-1.5 transition cursor-pointer text-slate-400 hover:text-slate-200 font-medium">
+            <span>✅ ผลตรวจ</span>
+          </button>
+        </div>
 
+        <!-- Tab 1: Inspector -->
+        <div id="inspector-content" class="flex-1 overflow-y-auto p-3.5"></div>
+
+        <!-- Tab 2: Check Results -->
+        <div id="sidebar-check-results" class="flex-1 overflow-y-auto hidden"></div>
+      </aside>
+
+    </div>
   </div>
 
-  <!-- ================= MODAL 1: VARIABLE CHEAT SHEET ================= -->
+  <!-- ================= MODAL: STUDIO CREATE LEVEL WIZARD ================= -->
+  <div id="create-level-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">🎓</span>
+          <div>
+            <h2 class="font-bold text-base text-white">สร้างด่านแบบฝึกหัดจาก Flow นี้</h2>
+            <p class="text-xs text-slate-400">ระบบจะวิเคราะห์ Flow ปัจจุบันเป็นเฉลย และสร้างเกณฑ์ตรวจให้อัตโนมัติ</p>
+          </div>
+        </div>
+        <button onclick="closeCreateLevelWizard()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="font-semibold text-slate-300">ชื่อด่าน (Title):</label>
+            <input id="wizard-title" type="text" placeholder="เช่น ระบบแจ้งเตือนยอดเงินสูงทาง LINE" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <div class="space-y-1">
+            <label class="font-semibold text-slate-300">ชื่อย่อ (Short Name):</label>
+            <input id="wizard-short" type="text" placeholder="เช่น เตือนยอดสูง" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="space-y-1">
+            <label class="font-semibold text-slate-300">สายการเรียนรู้ (Track):</label>
+            <select id="wizard-track" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="custom">🎓 ด่านสร้างเอง (Custom)</option>
+              <option value="basics">🧱 พื้นฐานตัวแปร</option>
+              <option value="conditions">🔀 เงื่อนไข</option>
+              <option value="data">📊 ข้อมูล & Loop</option>
+              <option value="ai">🤖 AI & API</option>
+              <option value="cases">🏪 เคสธุรกิจจริง</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="font-semibold text-slate-300">ระดับความยาก:</label>
+            <select id="wizard-difficulty" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="1">★☆☆ ง่าย</option>
+              <option value="2" selected>★★☆ ปานกลาง</option>
+              <option value="3">★★★ ท้าทาย</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="font-semibold text-slate-300">รูปแบบโจทย์ (Mode):</label>
+            <select id="wizard-mode" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="build" selected>🛠 ต่อเองตั้งแต่ต้น</option>
+              <option value="fill">✏️ เติมช่องว่าง (มีโครงให้)</option>
+              <option value="debug">🐞 หาจุดผิดและแก้</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="font-semibold text-slate-300">คำอธิบายโจทย์ (Mission Description):</label>
+          <textarea id="wizard-desc" rows="2" placeholder="อธิบายโจทย์ให้ผู้เล่นทราบว่าต้องสร้าง workflow ทำอะไร..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+
+        <!-- Progressive Hints Inputs -->
+        <div class="space-y-2 p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-amber-300">💡 คำใบ้เปิดทีละขั้น (3 ระดับ):</label>
+            <button type="button" onclick="autoPopulateWizardHints()" class="text-[11px] text-cyan-400 hover:text-cyan-300">⚡ ร่างคำใบ้อัตโนมัติจาก Flow</button>
+          </div>
+          <div class="space-y-2">
+            <div>
+              <span class="text-[10px] text-slate-400">ขั้นที่ 1 (แนวคิด & บล็อก):</span>
+              <input id="wizard-hint-1" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white mt-0.5" />
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400">ขั้นที่ 2 (การต่อสาย):</span>
+              <input id="wizard-hint-2" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white mt-0.5" />
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400">ขั้นที่ 3 (ตัวแปร & ค่าละเอียด):</span>
+              <input id="wizard-hint-3" type="text" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white mt-0.5" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Derived Checks Preview -->
+        <div id="wizard-checks-preview" class="space-y-1.5"></div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="testWizardCheck()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold cursor-pointer">
+            🧪 ทดสอบเกณฑ์ตรวจกับ Flow เฉลย
+          </button>
+          <div id="wizard-test-result" class="flex-1"></div>
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+        <button onclick="closeCreateLevelWizard()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer">
+          ยกเลิก
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="exportCustomLevelAsJsonFile()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+            <span>📤 ส่งออกไฟล์ด่าน (.json)</span>
+          </button>
+          <button onclick="saveCustomLevelToApp()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer">
+            <span>💾 บันทึกเป็นด่านแบบฝึกหัด</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: FLOW IMPORT / EXPORT (JSON) ================= -->
+  <div id="flow-import-export-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+        <div>
+          <h2 id="flow-io-title" class="font-bold text-base text-white">Flow JSON</h2>
+          <p id="flow-io-desc" class="text-xs text-slate-400">...</p>
+        </div>
+        <button onclick="closeFlowIoModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-5 space-y-3">
+        <textarea id="flow-io-textarea" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-xs font-mono-code text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+        
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <label class="flex items-center gap-2 cursor-pointer text-indigo-400 hover:text-indigo-300 font-medium">
+            <span>📁 หรือเลือกไฟล์ .json:</span>
+            <input type="file" accept=".json,application/json" onchange="handleFlowFileUpload(this)" class="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-slate-800 file:text-xs file:text-white" />
+          </label>
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+        <button onclick="closeFlowIoModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer">
+          ปิดหน้าต่าง
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="flow-io-download-btn" onclick="downloadExportedFlowFile()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+            <span>💾 ดาวน์โหลดไฟล์ .json</span>
+          </button>
+          <button id="flow-io-apply-btn" onclick="applyImportedFlow()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+            <span>⚡ โหลดขึ้นกระดาน</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ONBOARDING TOUR ================= -->
+  <div id="tour-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl max-w-xl w-full flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
+        <div class="flex items-center gap-2">
+          <span id="tour-step-icon" class="text-2xl">👋</span>
+          <span id="tour-step-badge" class="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold">
+            เริ่มต้นใช้งาน
+          </span>
+        </div>
+        <button onclick="closeTour()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 space-y-3 text-xs leading-relaxed">
+        <h3 id="tour-step-title" class="text-base font-bold text-white">ยินดีต้อนรับ</h3>
+        <div id="tour-step-content" class="text-slate-300 space-y-2">...</div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between shrink-0">
+        <div id="tour-dots" class="flex items-center gap-1.5"></div>
+        <div class="flex items-center gap-2">
+          <button id="tour-prev-btn" onclick="prevTourStep()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer">
+            ◀ ย้อนกลับ
+          </button>
+          <button id="tour-next-btn" onclick="nextTourStep()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1 cursor-pointer">
+            <span>ถัดไป ➔</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: VARIABLE CHEAT SHEET ================= -->
   <div id="guide-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
@@ -218,19 +484,19 @@
           <div class="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30">
             <div class="font-bold text-amber-300 text-sm mb-1.5">1. บล็อกจุดเริ่มต้น (Trigger) ให้อะไรเราบ้าง?</div>
             <ul class="space-y-1.5 text-slate-300">
-              <li>📝 <b>กรอกฟอร์ม:</b> ให้ <code class="text-amber-300 font-mono-code">{{customer_name}}</code> (ชื่อ), <code class="text-amber-300 font-mono-code">{{phone}}</code> (เบอร์), <code class="text-amber-300 font-mono-code">{{amount}}</code> (ยอดเงิน)</li>
-              <li>💬 <b>ทักแชท LINE:</b> ให้ <code class="text-amber-300 font-mono-code">{{user_name}}</code> (ชื่อไลน์), <code class="text-amber-300 font-mono-code">{{message_text}}</code> (ข้อความแชท)</li>
-              <li>⏰ <b>ตั้งเวลา Schedule:</b> ให้ <code class="text-amber-300 font-mono-code">{{current_date}}</code> (วันที่วันนี้)</li>
+              <li>📝 <b>กรอกฟอร์ม:</b> ให้ <code class="text-amber-300 font-mono-code">{{customer_name}}</code>, <code class="text-amber-300 font-mono-code">{{phone}}</code>, <code class="text-amber-300 font-mono-code">{{amount}}</code></li>
+              <li>💬 <b>ทักแชท LINE:</b> ให้ <code class="text-amber-300 font-mono-code">{{user_name}}</code>, <code class="text-amber-300 font-mono-code">{{message_text}}</code></li>
+              <li>⏰ <b>ตั้งเวลา Schedule:</b> ให้ <code class="text-amber-300 font-mono-code">{{current_date}}</code></li>
             </ul>
           </div>
 
           <div class="p-3.5 rounded-xl bg-cyan-950/30 border border-cyan-500/30">
             <div class="font-bold text-cyan-300 text-sm mb-1.5">2. บล็อกตัวกลาง & ปลายทาง ต้องรับอะไรเข้าไป?</div>
             <ul class="space-y-1.5 text-slate-300">
-              <li>🤖 <b>AI วิเคราะห์:</b> ต้องรับ <code class="text-cyan-300 font-mono-code">{{message_text}}</code> เข้าไปอ่าน ➔ แล้วคาย <code class="text-emerald-300 font-mono-code">{{ai_result}}</code> ออกมา</li>
-              <li>🔀 <b>เงื่อนไข IF:</b> ช่องซ้ายใส่ตัวที่จะเช็ค เช่น <code class="text-cyan-300 font-mono-code">{{amount}}</code> หรือ <code class="text-cyan-300 font-mono-code">{{ai_result}}</code></li>
-              <li>📊 <b>Google Sheets:</b> โหมดบันทึกใส่ <code class="text-cyan-300 font-mono-code">{{customer_name}}, {{phone}}, {{amount}}</code> / โหมดดึงข้อมูลจะคาย <code class="text-emerald-300 font-mono-code">{{sheet_rows}}</code> ออกมา</li>
-              <li>🟢 <b>ส่ง LINE:</b> อยากโชว์อะไรให้แอดมินอ่าน ก็เอาตัวแปรนั้นมาวางในช่องข้อความเลย!</li>
+              <li>🤖 <b>AI วิเคราะห์:</b> ต้องรับ <code class="text-cyan-300 font-mono-code">{{message_text}}</code> ➔ คาย <code class="text-emerald-300 font-mono-code">{{ai_result}}</code></li>
+              <li>🔀 <b>เงื่อนไข IF:</b> ช่องซ้ายใส่ตัวที่จะเช็ค เช่น <code class="text-cyan-300 font-mono-code">{{amount}}</code></li>
+              <li>📊 <b>Google Sheets:</b> บันทึกใส่ตัวแปร / ดึงข้อมูลคาย <code class="text-emerald-300 font-mono-code">{{sheet_rows}}</code></li>
+              <li>🟢 <b>ส่ง LINE:</b> วางตัวแปรในช่องข้อความได้เลย!</li>
             </ul>
           </div>
         </div>
@@ -244,7 +510,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 2: VARIABLE DIAGNOSTIC CHECKER ================= -->
+  <!-- ================= MODAL: VARIABLE DIAGNOSTIC CHECKER ================= -->
   <div id="var-check-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[82vh] flex flex-col shadow-2xl overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
@@ -252,7 +518,7 @@
           <span class="text-xl">🎯</span>
           <div>
             <h2 class="font-bold text-base text-white">ผลตรวจการใช้ตัวแปรในแต่ละบล็อก</h2>
-            <p class="text-xs text-slate-400">เช็คว่าแต่ละบล็อกหยิบตัวแปรไปใส่ถูกช่องหรือยัง (กดปุ่มเติมอัตโนมัติได้เลยหากไม่แน่ใจ)</p>
+            <p class="text-xs text-slate-400">เช็คว่าแต่ละบล็อกหยิบตัวแปรไปใส่ถูกช่องหรือยัง</p>
           </div>
         </div>
         <button onclick="closeVarCheckModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
@@ -293,7 +559,7 @@
           <span class="text-xl">▶</span>
           <div>
             <h2 class="font-bold text-base text-white">จำลองการทำงานของ Flow</h2>
-            <p class="text-xs text-slate-400">ลองป้อนข้อมูลตัวอย่างเข้า Trigger แล้วดูว่าตัวแปรไหลผ่านแต่ละบล็อกอย่างไร (ไม่ได้ส่งข้อความจริง)</p>
+            <p class="text-xs text-slate-400">ลองป้อนข้อมูลตัวอย่างเข้า Trigger แล้วดูว่าตัวแปรไหลผ่านแต่ละบล็อกอย่างไร</p>
           </div>
         </div>
         <button onclick="closeRunModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
@@ -318,7 +584,7 @@
           <span class="text-xl">🔮</span>
           <div>
             <h2 class="font-bold text-base text-white">ทายผลลัพธ์ของ Flow</h2>
-            <p class="text-xs text-slate-400">เลือกคำตอบแต่ละข้อ แล้วกดส่งคำตอบ (ปิดหน้าต่างนี้เพื่อกลับไปดู Flow ได้)</p>
+            <p class="text-xs text-slate-400">เลือกคำตอบแต่ละข้อ แล้วกดส่งคำตอบ</p>
           </div>
         </div>
         <button onclick="closePredictModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
@@ -330,7 +596,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 2.5: LEVEL CHECK RESULT ================= -->
+  <!-- ================= MODAL: LEVEL CHECK RESULT ================= -->
   <div id="level-check-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       <div id="level-check-header" class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50"></div>
@@ -349,7 +615,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 3: EXPORT FOR REVIEW ================= -->
+  <!-- ================= MODAL: EXPORT FOR REVIEW ================= -->
   <div id="export-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full flex flex-col shadow-2xl overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
@@ -357,7 +623,7 @@
           <span class="text-xl">📋</span>
           <div>
             <h2 class="font-bold text-base text-white">คัดลอกสรุป Flow เพื่อส่งตรวจในแชท</h2>
-            <p class="text-xs text-slate-400">กดปุ่มคัดลอกด้านล่าง แล้วนำไปวาง (Paste) ในช่องแชทให้ผมตรวจได้เลยครับ!</p>
+            <p class="text-xs text-slate-400">กดปุ่มคัดลอกด้านล่าง แล้วนำไปวางในช่องแชทได้เลยครับ</p>
           </div>
         </div>
         <button onclick="closeExportModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
@@ -366,7 +632,7 @@
       <div class="p-5 space-y-3">
         <textarea id="export-textarea" readonly rows="12" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono-code text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
         <div id="copy-success-msg" class="hidden text-emerald-400 text-xs font-medium flex items-center gap-1.5">
-          <span>✅ คัดลอกลง Clipboard เรียบร้อยแล้ว! นำไปกด Paste ส่งในแชทได้เลยครับ</span>
+          <span>✅ คัดลอกลง Clipboard เรียบร้อยแล้ว!</span>
         </div>
       </div>
 
@@ -383,7 +649,7 @@
 
 
   <!-- ================= APPLICATION JAVASCRIPT ================= -->
-  <!-- shared: ข้อมูลและระบบตรวจที่ใช้ร่วมกับ backend ได้ -->
+  <!-- shared -->
   <script src="../shared/variables.js"></script>
   <script src="../shared/blocks.js"></script>
   <script src="../shared/levels/_helpers.js"></script>
@@ -394,8 +660,10 @@
   <script src="../shared/levels/ai.js"></script>
   <script src="../shared/levels/cases.js"></script>
   <script src="../shared/levels.js"></script>
+  <script src="../shared/hints.js"></script>
   <script src="../shared/simulator.js"></script>
   <script src="../shared/checker.js"></script>
+  <script src="../shared/sanitize.js"></script>
   <!-- frontend -->
   <script src="js/api/storage.js"></script>
   <script src="js/utils.js"></script>
@@ -407,5 +675,8 @@
   <script src="js/ui/inspector.js"></script>
   <script src="js/ui/modals.js"></script>
   <script src="js/ui/run.js"></script>
+  <script src="js/ui/home.js"></script>
+  <script src="js/ui/studio.js"></script>
+  <script src="js/ui/tour.js"></script>
 </body>
 </html>
