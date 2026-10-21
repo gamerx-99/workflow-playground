@@ -116,4 +116,4 @@ function sanitizeCustomLevel(raw, catalog, trackIds = [], runners = {}) {
   return level;
 }
 
-if (typeof module !== 'undefined') module.exports = { sanitizeCustomLevel, escapeText };
+if (typeof module !== 'undefined') module.exports = { sanitizeCustomLevel, sanitizeFlow, escapeText };

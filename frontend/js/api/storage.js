@@ -280,10 +280,11 @@ const RemoteApi = {
   },
 
   // Auth Methods
-  async register(username, password, displayName, role = 'student') {
+  // สมัครเองได้เป็นนักเรียนเท่านั้น; ผู้สอนต้องส่ง teacherCode ที่ถูกต้อง (server ตรวจกับ TEACHER_SIGNUP_CODE)
+  async register(username, password, displayName, teacherCode = '') {
     const data = await this.fetchApi('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, password, displayName, role })
+      body: JSON.stringify({ username, password, displayName, ...(teacherCode ? { teacherCode } : {}) })
     });
     if (data.ok && data.token) {
       this.setToken(data.token);

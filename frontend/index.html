@@ -753,10 +753,14 @@
             </div>
             <div>
               <label class="block text-slate-400 mb-1">บทบาท (Role):</label>
-              <select id="reg-role" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <select id="reg-role" onchange="document.getElementById('reg-teacher-code-box').classList.toggle('hidden', this.value !== 'teacher')" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
                 <option value="student" selected>🧑‍🎓 นักเรียน (Student)</option>
-                <option value="teacher">👨‍🏫 ผู้สอน (Teacher)</option>
+                <option value="teacher">👨‍🏫 ผู้สอน (Teacher) — ต้องมีรหัสจากผู้ดูแลระบบ</option>
               </select>
+            </div>
+            <div id="reg-teacher-code-box" class="hidden">
+              <label class="block text-slate-400 mb-1">รหัสสำหรับสมัครเป็นผู้สอน:</label>
+              <input id="reg-teacher-code" type="password" autocomplete="off" placeholder="รหัสที่ผู้ดูแลระบบตั้งไว้ (TEACHER_SIGNUP_CODE)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
             </div>
             <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition">
               สมัครสมาชิกใหม่

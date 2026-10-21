@@ -10,22 +10,66 @@ const { initDb, hashPassword } = require('./db.js');
 const { LEVELS, TRACKS } = require('../shared/levels.js');
 const { BLOCK_CATALOG } = require('../shared/blocks.js');
 const { checkFlow, checkPrediction, CHECK_RUNNERS } = require('../shared/checker.js');
-const { sanitizeCustomLevel } = require('../shared/sanitize.js');
+const { sanitizeCustomLevel, sanitizeFlow } = require('../shared/sanitize.js');
 
 const PORT = parseInt(process.env.API_PORT || '8788', 10);
 const PYTHON_COACH_URL = process.env.COACH_URL || 'http://127.0.0.1:8787/coach';
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+// ---------------------------------------------------------
+// ความปลอดภัย: เว็บอื่นที่ผู้ใช้เปิดอยู่ในเบราว์เซอร์เดียวกัน เรียก API บน localhost นี้ได้ (CORS ไม่ได้กันการ "ส่งคำขอ" ไปถึง
+// กันแค่การอ่านผลลัพธ์) จึงต้อง "ปฏิเสธคำขอ" ที่มี Origin นอกรายการอนุญาต ไม่ใช่แค่ไม่ส่ง header ตอบกลับ
+// ค่าเริ่มต้น: เฉพาะหน้าเว็บของเราที่ http://localhost:5173 / http://127.0.0.1:5173
+// เปิดเพิ่มด้วย ALLOWED_ORIGINS="http://localhost:5173,https://lab.example.com"
+// (ไม่รวม "null" โดยค่าเริ่มต้น เพราะหน้าที่ถูก sandbox จะส่ง Origin: null ได้ ทำให้เลี่ยงการป้องกันนี้ได้ — เปิดเองเฉพาะเมื่อจำเป็นต้องใช้ file://)
+// ---------------------------------------------------------
+const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+function allowedOrigins() {
+  const fromEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+  return fromEnv.length ? fromEnv : DEFAULT_ALLOWED_ORIGINS;
+}
+
+// จำกัดจำนวนครั้งที่ล็อกอินผิด (กันเดารหัสผ่าน): ผิดเกิน LOGIN_MAX_FAILS ครั้งใน LOGIN_WINDOW_MS ต่อ (IP + ชื่อผู้ใช้)
+const LOGIN_MAX_FAILS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const COACH_MAX_PER_MINUTE = 10;
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+function safeEqualHex(a, b) {
+  const ba = Buffer.from(String(a), 'hex');
+  const bb = Buffer.from(String(b), 'hex');
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
 
 function createServer(dbInstance = null) {
   const db = dbInstance || initDb();
+  const loginFails = new Map(); // key -> [timestamps]
+  const coachCalls = new Map(); // userId -> [timestamps]
 
-  // Helper ส่ง JSON
+  function recentCount(map, key, windowMs) {
+    const now = Date.now();
+    const list = (map.get(key) || []).filter(t => now - t < windowMs);
+    map.set(key, list);
+    return list.length;
+  }
+  function record(map, key) {
+    const list = map.get(key) || [];
+    list.push(Date.now());
+    map.set(key, list);
+  }
+
+  // Helper ส่ง JSON (ส่ง Access-Control-Allow-Origin เฉพาะ origin ที่อนุญาต ไม่ใช้ '*')
   function sendJson(res, statusCode, data) {
-    res.writeHead(statusCode, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    });
+    const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Origin' };
+    if (res.corsOrigin) {
+      headers['Access-Control-Allow-Origin'] = res.corsOrigin;
+      headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+    }
+    res.writeHead(statusCode, headers);
     res.end(JSON.stringify(data));
   }
 
@@ -33,29 +77,43 @@ function createServer(dbInstance = null) {
     sendJson(res, statusCode, { ok: false, error: message, code });
   }
 
-  // อ่าน Body ของ Request
+  // อ่าน Body ของ Request (จำกัดขนาด — เกินแล้วหยุดอ่านและตัดการเชื่อมต่อ)
   function parseBody(req) {
     return new Promise((resolve, reject) => {
       let body = '';
+      let size = 0;
+      let done = false;
+      const fail = (err) => { if (!done) { done = true; reject(err); } };
       req.on('data', chunk => {
-        body += chunk;
-        if (body.length > 2 * 1024 * 1024) { // จำกัด 2MB
-          reject(new Error('Request body too large'));
+        if (done) return;
+        size += chunk.length;
+        if (size > MAX_BODY_BYTES) {
+          const err = new Error('Request body too large');
+          err.statusCode = 413;
+          fail(err);
+          req.destroy();
+          return;
         }
+        body += chunk;
       });
       req.on('end', () => {
+        if (done) return;
+        done = true;
         if (!body) return resolve({});
         try {
           resolve(JSON.parse(body));
         } catch (e) {
-          reject(new Error('Invalid JSON'));
+          const err = new Error('Invalid JSON');
+          err.statusCode = 400;
+          reject(err);
         }
       });
-      req.on('error', reject);
+      req.on('error', fail);
     });
   }
 
   // ตรวจสอบตัวตนผู้ใช้จาก Header Authorization
+  // token ในฐานข้อมูลเก็บเป็นค่า SHA-256 (ไม่เก็บ token ดิบ) — ถ้าฐานข้อมูลรั่ว ก็เอาไปสวมสิทธิ์ไม่ได้
   function authenticate(req) {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -67,22 +125,47 @@ function createServer(dbInstance = null) {
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.token = ? AND s.expires_at > ?
-    `).get(token, Date.now());
+    `).get(sha256(token), Date.now());
 
     return session || null;
   }
 
+  function issueSession(userId) {
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare(`
+      INSERT INTO sessions (token, user_id, created_at, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(sha256(token), userId, Date.now(), Date.now() + 30 * 24 * 60 * 60 * 1000); // อายุ 30 วัน
+    return token;
+  }
+
   const server = http.createServer(async (req, res) => {
+    // ตรวจ Origin: มี Origin แต่ไม่อยู่ในรายการอนุญาต = ปฏิเสธทันที (ไม่ประมวลผลคำขอ)
+    const origin = req.headers['origin'];
+    if (origin) {
+      if (!allowedOrigins().includes(origin)) {
+        return sendError(res, 403, 'Origin ไม่ได้รับอนุญาต', 'ORIGIN_FORBIDDEN');
+      }
+      res.corsOrigin = origin;
+    }
+
     // CORS Preflight
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400'
-      });
+      const headers = { 'Vary': 'Origin' };
+      if (res.corsOrigin) {
+        headers['Access-Control-Allow-Origin'] = res.corsOrigin;
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+        headers['Access-Control-Max-Age'] = '86400';
+      }
+      res.writeHead(204, headers);
       res.end();
       return;
+    }
+
+    // คำขอที่มีเนื้อหา ต้องเป็น application/json เท่านั้น (บังคับให้เว็บอื่นต้องผ่าน preflight ซึ่งถูกปฏิเสธข้างบน)
+    if (['POST', 'PUT'].includes(req.method) && !String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+      return sendError(res, 415, 'ต้องส่งเป็น application/json', 'UNSUPPORTED_MEDIA_TYPE');
     }
 
     const reqUrl = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
@@ -108,8 +191,11 @@ function createServer(dbInstance = null) {
       // สมัครสมาชิกใหม่
       if (pathname === '/api/auth/register' && method === 'POST') {
         const body = await parseBody(req);
-        const { username, password, displayName, role } = body;
+        const { username, password, displayName, teacherCode } = body;
 
+        if (typeof username !== 'string' || typeof password !== 'string') {
+          return sendError(res, 400, 'รูปแบบข้อมูลไม่ถูกต้อง');
+        }
         if (!username || username.trim().length < 3) {
           return sendError(res, 400, 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
         }
@@ -126,21 +212,26 @@ function createServer(dbInstance = null) {
         const userId = 'user_' + crypto.randomBytes(8).toString('hex');
         const salt = crypto.randomBytes(16).toString('hex');
         const passwordHash = hashPassword(password, salt);
-        const userRole = (role === 'teacher') ? 'teacher' : 'student';
-        const name = (displayName && displayName.trim()) || username;
+        // สมัครเองได้เฉพาะ "นักเรียน" — บทบาทผู้สอนต้องใส่รหัสลับที่ผู้ดูแลตั้งไว้ใน TEACHER_SIGNUP_CODE (ถ้าไม่ตั้ง = สมัครผู้สอนเองไม่ได้)
+        // ห้ามเชื่อ role ที่ส่งมาจากฝั่งผู้ใช้ ไม่งั้นใครก็สมัครเป็นผู้สอนแล้วเห็นข้อมูลนักเรียนทั้งห้องได้
+        const teacherSecret = process.env.TEACHER_SIGNUP_CODE || '';
+        let userRole = 'student';
+        if (teacherCode !== undefined && teacherCode !== '') {
+          const given = crypto.createHash('sha256').update(String(teacherCode)).digest();
+          const expected = crypto.createHash('sha256').update(teacherSecret).digest();
+          if (!teacherSecret || !crypto.timingSafeEqual(given, expected)) {
+            return sendError(res, 403, 'รหัสสำหรับสมัครเป็นผู้สอนไม่ถูกต้อง');
+          }
+          userRole = 'teacher';
+        }
+        const name = ((typeof displayName === 'string' && displayName.trim()) || username).slice(0, 80);
 
         db.prepare(`
           INSERT INTO users (id, username, password_hash, salt, display_name, role, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(userId, cleanUsername, passwordHash, salt, name, userRole, Date.now());
 
-        // สร้าง Session Token อายุ 30 วัน
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-        db.prepare(`
-          INSERT INTO sessions (token, user_id, created_at, expires_at)
-          VALUES (?, ?, ?, ?)
-        `).run(token, userId, Date.now(), expiresAt);
+        const token = issueSession(userId);
 
         return sendJson(res, 201, {
           ok: true,
@@ -154,28 +245,26 @@ function createServer(dbInstance = null) {
         const body = await parseBody(req);
         const { username, password } = body;
 
-        if (!username || !password) {
+        if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
           return sendError(res, 400, 'กรุณาระบุชื่อผู้ใช้และรหัสผ่าน');
         }
 
         const cleanUsername = username.trim().toLowerCase();
+        const throttleKey = `${req.socket.remoteAddress}|${cleanUsername}`;
+        if (recentCount(loginFails, throttleKey, LOGIN_WINDOW_MS) >= LOGIN_MAX_FAILS) {
+          return sendError(res, 429, 'ล็อกอินผิดหลายครั้งเกินไป กรุณารอ 15 นาทีแล้วลองใหม่', 'TOO_MANY_ATTEMPTS');
+        }
+
         const user = db.prepare(`SELECT * FROM users WHERE username = ?`).get(cleanUsername);
-        if (!user) {
+        // คำนวณแฮชเสมอแม้ไม่พบผู้ใช้ เพื่อให้เวลาตอบไม่บอกว่าชื่อผู้ใช้มีอยู่จริงหรือไม่
+        const testHash = hashPassword(password, user ? user.salt : '0'.repeat(32));
+        if (!user || !safeEqualHex(testHash, user.password_hash)) {
+          record(loginFails, throttleKey);
           return sendError(res, 401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
         }
+        loginFails.delete(throttleKey);
 
-        const testHash = hashPassword(password, user.salt);
-        if (testHash !== user.password_hash) {
-          return sendError(res, 401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-        }
-
-        // สร้าง Session Token
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-        db.prepare(`
-          INSERT INTO sessions (token, user_id, created_at, expires_at)
-          VALUES (?, ?, ?, ?)
-        `).run(token, user.id, Date.now(), expiresAt);
+        const token = issueSession(user.id);
 
         return sendJson(res, 200, {
           ok: true,
@@ -188,7 +277,7 @@ function createServer(dbInstance = null) {
       if (pathname === '/api/auth/logout' && method === 'POST') {
         const auth = authenticate(req);
         if (auth) {
-          db.prepare(`DELETE FROM sessions WHERE token = ?`).run(auth.token);
+          db.prepare(`DELETE FROM sessions WHERE token = ?`).run(auth.token); // auth.token คือค่าแฮชที่เก็บในฐานข้อมูล
         }
         return sendJson(res, 200, { ok: true });
       }
@@ -221,11 +310,11 @@ function createServer(dbInstance = null) {
           return copy;
         });
 
-        // ด่าน Custom จากฐานข้อมูล
-        const customRows = db.prepare(`SELECT level_json FROM custom_levels`).all();
+        // ด่าน Custom จากฐานข้อมูล — เฉลยเห็นได้เฉพาะเจ้าของด่านและผู้สอน
+        const customRows = db.prepare(`SELECT user_id, level_json FROM custom_levels`).all();
         const customLevels = customRows.map(r => {
           const l = JSON.parse(r.level_json);
-          if (!isTeacher) delete l.template;
+          if (!isTeacher && !(auth && auth.id === r.user_id)) delete l.template;
           return l;
         });
 
@@ -352,11 +441,14 @@ function createServer(dbInstance = null) {
         const auth = authenticate(req);
         const userId = auth ? auth.id : 'guest';
         const body = await parseBody(req);
-        const id = body.id || ('proj_' + Date.now());
-        const name = (body.name && body.name.trim()) || 'โปรเจกต์ใหม่';
+        const id = (typeof body.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.id)) ? body.id : ('proj_' + crypto.randomBytes(6).toString('hex'));
+        const name = ((typeof body.name === 'string' && body.name.trim()) || 'โปรเจกต์ใหม่').slice(0, 120);
         const flow = body.flow || { nodes: [], connections: [], nextNodeId: 1 };
         const now = Date.now();
 
+        if (db.prepare(`SELECT 1 FROM projects WHERE id = ?`).get(id)) {
+          return sendError(res, 409, 'รหัสโปรเจกต์นี้ถูกใช้งานแล้ว', 'CONFLICT');
+        }
         db.prepare(`
           INSERT INTO projects (id, user_id, name, flow_json, updated_at)
           VALUES (?, ?, ?, ?, ?)
@@ -400,20 +492,38 @@ function createServer(dbInstance = null) {
       // 5. CUSTOM LEVELS MANAGEMENT
       // ---------------------------------------------------------
       if (pathname === '/api/custom-levels' && method === 'GET') {
-        const rows = db.prepare(`SELECT id, title, level_json, created_at FROM custom_levels ORDER BY created_at DESC`).all();
-        const customLevels = rows.map(r => JSON.parse(r.level_json));
+        // เฉลย (template) เห็นได้เฉพาะเจ้าของด่านและผู้สอน — เหมือนกับ GET /api/levels
+        const auth = authenticate(req);
+        const isTeacher = auth && auth.role === 'teacher';
+        const rows = db.prepare(`SELECT id, user_id, title, level_json, created_at FROM custom_levels ORDER BY created_at DESC`).all();
+        const customLevels = rows.map(r => {
+          const l = JSON.parse(r.level_json);
+          if (!isTeacher && !(auth && auth.id === r.user_id)) delete l.template;
+          return l;
+        });
         return sendJson(res, 200, { ok: true, customLevels });
       }
 
       if (pathname === '/api/custom-levels' && method === 'POST') {
         const auth = authenticate(req);
-        const userId = auth ? auth.id : 'guest';
+        if (!auth) return sendError(res, 401, 'ต้องเข้าสู่ระบบก่อนสร้างหรือแก้ไขด่าน', 'UNAUTHORIZED');
         const body = await parseBody(req);
 
-        // ทำความสะอาดระดับความปลอดภัย (XSS Prevention)
-        const sanitized = sanitizeCustomLevel(body, BLOCK_CATALOG, TRACKS.map(t => t.id), CHECK_RUNNERS);
+        // ทำความสะอาดระดับความปลอดภัย (XSS Prevention) — ข้อมูลไม่ถูกต้องตอบ 400 ไม่ใช่ 500
+        let sanitized;
+        try {
+          sanitized = sanitizeCustomLevel(body, BLOCK_CATALOG, TRACKS.map(t => t.id), CHECK_RUNNERS);
+        } catch (e) {
+          return sendError(res, 400, e.message, 'INVALID_LEVEL');
+        }
         const id = sanitized.id;
         const now = Date.now();
+
+        // แก้ไขทับด่านเดิมได้เฉพาะเจ้าของด่านหรือผู้สอน (กันคนอื่นเดา id แล้วเขียนทับ)
+        const existing = db.prepare(`SELECT user_id FROM custom_levels WHERE id = ?`).get(id);
+        if (existing && existing.user_id !== auth.id && auth.role !== 'teacher') {
+          return sendError(res, 403, 'ไม่ใช่เจ้าของด่านนี้', 'FORBIDDEN');
+        }
 
         db.prepare(`
           INSERT INTO custom_levels (id, user_id, title, level_json, created_at)
@@ -421,14 +531,21 @@ function createServer(dbInstance = null) {
           ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             level_json = excluded.level_json
-        `).run(id, userId, sanitized.title, JSON.stringify(sanitized), now);
+        `).run(id, auth.id, sanitized.title, JSON.stringify(sanitized), now);
 
         return sendJson(res, 201, { ok: true, level: sanitized });
       }
 
       const customLevelMatch = pathname.match(/^\/api\/custom-levels\/([^/]+)$/);
       if (customLevelMatch && method === 'DELETE') {
+        const auth = authenticate(req);
+        if (!auth) return sendError(res, 401, 'ต้องเข้าสู่ระบบก่อนลบด่าน', 'UNAUTHORIZED');
         const id = customLevelMatch[1];
+        const existing = db.prepare(`SELECT user_id FROM custom_levels WHERE id = ?`).get(id);
+        if (!existing) return sendError(res, 404, 'ไม่พบด่านนี้', 'NOT_FOUND');
+        if (existing.user_id !== auth.id && auth.role !== 'teacher') {
+          return sendError(res, 403, 'ไม่ใช่เจ้าของด่านนี้', 'FORBIDDEN');
+        }
         db.prepare(`DELETE FROM custom_levels WHERE id = ?`).run(id);
         return sendJson(res, 200, { ok: true });
       }
@@ -438,19 +555,34 @@ function createServer(dbInstance = null) {
       // ---------------------------------------------------------
       if (pathname === '/api/share' && method === 'POST') {
         const auth = authenticate(req);
-        const userId = auth ? auth.id : 'guest';
+        if (!auth) return sendError(res, 401, 'ต้องเข้าสู่ระบบก่อนแชร์', 'UNAUTHORIZED');
         const body = await parseBody(req);
         const { type, title, data } = body; // type: 'project' | 'level'
 
         if (!data) return sendError(res, 400, 'ข้อมูลที่ต้องการแชร์ว่างเปล่า');
+        const shareType = type === 'level' ? 'level' : 'project';
+
+        // ตรวจและทำความสะอาดข้อมูลก่อนเก็บ — คนที่เปิดลิงก์จะได้รับเฉพาะข้อมูลที่ผ่านการตรวจแล้ว
+        let cleanData;
+        try {
+          if (shareType === 'level') {
+            cleanData = sanitizeCustomLevel(data, BLOCK_CATALOG, TRACKS.map(t => t.id), CHECK_RUNNERS);
+          } else {
+            const flow = sanitizeFlow(data, BLOCK_CATALOG, 'flow ที่แชร์');
+            cleanData = { ...flow, nextNodeId: Math.max(0, ...flow.nodes.map(n => n.id)) + 1 };
+          }
+        } catch (e) {
+          return sendError(res, 400, e.message, 'INVALID_SHARE_DATA');
+        }
 
         const code = crypto.randomBytes(4).toString('hex'); // 8 ตัวอักษร เช่น 4a8f9c1b
         const now = Date.now();
+        const cleanTitle = String(title || 'Shared Workflow').slice(0, 120).replace(/[<>"'`]/g, '');
 
         db.prepare(`
           INSERT INTO shares (code, user_id, type, title, data_json, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(code, userId, type || 'project', title || 'Shared Workflow', JSON.stringify(data), now);
+        `).run(code, auth.id, shareType, cleanTitle, JSON.stringify(cleanData), now);
 
         return sendJson(res, 201, {
           ok: true,
@@ -536,6 +668,13 @@ function createServer(dbInstance = null) {
       // 8. AI COACH PROXY (ส่งต่อไปยัง Python Backend บนพอร์ต 8787)
       // ---------------------------------------------------------
       if (pathname === '/api/coach' && method === 'POST') {
+        // การเรียก AI มีค่าใช้จ่าย: ต้องล็อกอิน และจำกัดจำนวนครั้งต่อนาทีต่อผู้ใช้
+        const auth = authenticate(req);
+        if (!auth) return sendError(res, 401, 'ต้องเข้าสู่ระบบก่อนใช้ AI Coach', 'UNAUTHORIZED');
+        if (recentCount(coachCalls, auth.id, 60 * 1000) >= COACH_MAX_PER_MINUTE) {
+          return sendError(res, 429, 'ขอคำแนะนำถี่เกินไป กรุณารอสักครู่', 'RATE_LIMITED');
+        }
+        record(coachCalls, auth.id);
         const body = await parseBody(req);
         const postData = JSON.stringify(body);
 
@@ -576,8 +715,12 @@ function createServer(dbInstance = null) {
       return sendError(res, 404, 'Endpoint not found', 'NOT_FOUND');
 
     } catch (err) {
+      // ความผิดพลาดที่ผู้ใช้ก่อ (JSON เสีย/ใหญ่เกิน) ตอบตามจริง; ความผิดพลาดภายในไม่ส่งรายละเอียดออกไป (บันทึกไว้ฝั่งเซิร์ฟเวอร์)
+      if (err && err.statusCode && err.statusCode < 500) {
+        return sendError(res, err.statusCode, err.message, 'BAD_REQUEST');
+      }
       console.error('Server error:', err);
-      return sendError(res, 500, err.message, 'INTERNAL_ERROR');
+      return sendError(res, 500, 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์', 'INTERNAL_ERROR');
     }
   });
 

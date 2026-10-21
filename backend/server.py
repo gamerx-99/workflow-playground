@@ -10,6 +10,7 @@ Endpoint:
 """
 
 import asyncio
+import os
 
 import pydantic
 from starlette.applications import Starlette
@@ -33,7 +34,26 @@ async def health(request: Request) -> JSONResponse:
   return JSONResponse({"ok": True, "ai": problem is None, "reason": problem, "provider": coach.provider()})
 
 
+DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def allowed_origins() -> list[str]:
+  """Origin ของหน้าเว็บที่อนุญาตให้เรียก backend นี้ — ตั้งเพิ่มได้ด้วย ALLOWED_ORIGINS="a,b"
+
+  ไม่รวม "null" โดยค่าเริ่มต้น: หน้าที่ถูก sandbox จะส่ง Origin: null ได้ จึงเลี่ยงการป้องกันนี้ได้
+  (ผลคือเปิดหน้าเว็บแบบ file:// แล้ว AI Coach จะใช้ไม่ได้ — ถ้าจำเป็นให้ตั้ง ALLOWED_ORIGINS=null เอง)"""
+  configured = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+  return configured or DEFAULT_ALLOWED_ORIGINS
+
+
 async def coach_endpoint(request: Request) -> JSONResponse:
+  # CORS กันแค่การ "อ่านผล" ไม่ได้กันการส่งคำขอ — เว็บอื่นที่ผู้ใช้เปิดอยู่ยิงมาที่ localhost ได้ และการเรียกโมเดลมีค่าใช้จ่าย
+  # จึงปฏิเสธคำขอที่มี Origin นอกรายการ และบังคับ application/json (ทำให้เว็บอื่นต้องผ่าน preflight ที่ถูกปฏิเสธ)
+  origin = request.headers.get("origin")
+  if origin and origin not in allowed_origins():
+    return JSONResponse({"error": "origin_forbidden"}, status_code=403)
+  if not request.headers.get("content-type", "").lower().startswith("application/json"):
+    return JSONResponse({"error": "unsupported_media_type"}, status_code=415)
   raw = await request.body()
   if len(raw) > MAX_BODY_BYTES:
     return JSONResponse({"error": "too_large"}, status_code=413)
@@ -64,11 +84,7 @@ app = Starlette(
     middleware=[
         Middleware(
             CORSMiddleware,
-            allow_origins=[
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "null",  # เปิดไฟล์ frontend/index.html ตรงๆ (file://)
-            ],
+            allow_origins=allowed_origins(),
             allow_methods=["GET", "POST"],
             allow_headers=["Content-Type"],
         )

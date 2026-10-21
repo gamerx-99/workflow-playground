@@ -111,7 +111,11 @@ function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
+// บัญชีตัวอย่าง (teacher/teacher123, student/student123) ไว้ใช้พัฒนาและสาธิตเท่านั้น — รหัสผ่านเป็นที่รู้กัน
+// ปิดการสร้างได้ด้วย NODE_ENV=production หรือ SEED_DEMO_USERS=0 (แนะนำเมื่อเปิดใช้งานจริง)
 function seedDefaultUsers(db) {
+  if (process.env.NODE_ENV === 'production' || process.env.SEED_DEMO_USERS === '0') return;
+  console.warn('⚠️  สร้างบัญชีตัวอย่าง teacher/student ที่รหัสผ่านเป็นที่รู้กัน — ห้ามใช้ในระบบจริง (ตั้ง SEED_DEMO_USERS=0 เพื่อปิด)');
   const findUser = db.prepare(`SELECT id FROM users WHERE username = ?`);
 
   // 1. บัญชีผู้สอน (Teacher)

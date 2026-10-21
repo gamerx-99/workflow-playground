@@ -232,6 +232,47 @@ class EndpointTests(unittest.TestCase):
     bad = self.client.options("/coach", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
     self.assertIsNone(bad.headers.get("access-control-allow-origin"))
 
+  def _post_with_origin(self, origin, content_type="application/json"):
+    """ยิง POST /coach จาก Origin ที่กำหนด โดยจับว่ามีการเรียกโมเดล (ซึ่งมีค่าใช้จะ) หรือไม่"""
+    reply = coach.CoachReply(diagnosis="d", hint="h", next_step="n", concept="c")
+    stub = mock.AsyncMock(return_value=reply)
+    headers = {"Content-Type": content_type}
+    if origin:
+      headers["Origin"] = origin
+    with mock.patch.object(coach, "ask_coach", stub):
+      r = self.client.post("/coach", content=json.dumps(VALID), headers=headers)
+    return r, stub
+
+  def test_foreign_origin_post_is_rejected_before_any_model_call(self):
+    # ไม่ผ่าน preflight (เช่น text/plain หรือ fetch no-cors) ก็ต้องไม่เรียกโมเดล
+    r, stub = self._post_with_origin("https://evil.example")
+    self.assertEqual(r.status_code, 403)
+    stub.assert_not_called()
+
+  def test_null_origin_is_rejected_by_default(self):
+    r, stub = self._post_with_origin("null")
+    self.assertEqual(r.status_code, 403)
+    stub.assert_not_called()
+
+  def test_non_json_content_type_is_rejected(self):
+    r, stub = self._post_with_origin("http://localhost:5173", content_type="text/plain")
+    self.assertEqual(r.status_code, 415)
+    stub.assert_not_called()
+
+  def test_allowed_origin_and_no_origin_work(self):
+    for origin in ("http://localhost:5173", "http://127.0.0.1:5173", None):
+      r, stub = self._post_with_origin(origin)
+      self.assertEqual(r.status_code, 200, origin)
+      stub.assert_called_once()
+
+  def test_allowed_origins_can_be_extended_via_env(self):
+    with mock.patch.dict(os.environ, {"ALLOWED_ORIGINS": "https://lab.example.com"}):
+      self.assertEqual(server.allowed_origins(), ["https://lab.example.com"])
+      r, _ = self._post_with_origin("https://lab.example.com")
+      self.assertEqual(r.status_code, 200)
+      r, _ = self._post_with_origin("http://localhost:5173")  # ค่าเริ่มต้นถูกแทนที่ ไม่ใช่เพิ่ม
+      self.assertEqual(r.status_code, 403)
+
 
 if __name__ == "__main__":
   unittest.main()

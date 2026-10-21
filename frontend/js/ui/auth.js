@@ -116,7 +116,9 @@ async function handleRegister(e) {
 
   try {
     errEl.classList.add('hidden');
-    await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), roleEl.value);
+    // บทบาทผู้สอนต้องแนบรหัส server จะเป็นผู้ตัดสิน (ไม่เชื่อ role ที่ฝั่งผู้ใช้ส่งมา)
+    const teacherCode = roleEl.value === 'teacher' ? document.getElementById('reg-teacher-code').value : '';
+    await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
     setApiMode('remote');
     closeAuthModal();
     alert('สมัครสมาชิกและเข้าสู่ระบบเรียบร้อยแล้ว!');
@@ -318,17 +320,23 @@ async function checkIncomingShare() {
     const res = await RemoteApi.getShare(shareCode);
     if (!res.ok) return;
 
-    setTimeout(() => {
-      if (confirm(`พบ Workflow ที่แชร์มา:\n"${res.title}" โดย ${res.author}\n\nต้องการเปิด Flow นี้ในโหมดสตูดิโอ (Studio) เลยหรือไม่?`)) {
-        switchView('studio');
-        nodes = res.data.nodes || [];
-        connections = res.data.connections || [];
-        nextNodeId = res.data.nextNodeId || (Math.max(0, ...nodes.map(n => n.id)) + 1);
+    setTimeout(async () => {
+      if (!confirm(`พบ Workflow ที่แชร์มา:\n"${res.title}" โดย ${res.author}\n\nต้องการเปิดในโหมดสตูดิโอ (Studio) เลยหรือไม่?`)) return;
+      try {
+        // ข้อมูลจากลิงก์เป็นข้อมูลที่ไม่น่าเชื่อถือ — ตรวจและทำความสะอาดก่อนนำขึ้นกระดานเสมอ
+        const flow = sanitizeFlow(res.data, BLOCK_CATALOG, 'Flow ที่แชร์มา');
+        await switchView('studio');
+        nodes = flow.nodes;
+        connections = flow.connections;
+        nextNodeId = Math.max(0, ...nodes.map(n => n.id)) + 1;
         renderCanvas();
         renderInspector();
+        centerCanvasView();
         if (typeof saveStudioProjectNow === 'function') {
           saveStudioProjectNow();
         }
+      } catch (e) {
+        alert(`เปิด Flow ที่แชร์มาไม่ได้: ${e.message}`);
       }
     }, 600);
   } catch (e) {

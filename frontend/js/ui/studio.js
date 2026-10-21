@@ -376,13 +376,11 @@ function applyImportedFlow() {
   }
   try {
     const data = JSON.parse(raw);
-    const importedNodes = data.nodes || [];
-    const importedConns = data.connections || [];
-    if (!Array.isArray(importedNodes)) throw new Error('ข้อมูล nodes ต้องเป็น Array');
-
-    nodes = importedNodes;
-    connections = importedConns;
-    nextNodeId = data.nextNodeId || (Math.max(0, ...nodes.map(n => n.id)) + 1);
+    // ไฟล์ที่นำเข้าเป็นข้อมูลที่ไม่น่าเชื่อถือ — ตรวจโครงสร้าง (ชนิดบล็อก, id, พอร์ต, ขนาด) และทำความสะอาดก่อนขึ้นกระดาน
+    const flow = sanitizeFlow(data, BLOCK_CATALOG, 'Flow ที่นำเข้า');
+    nodes = flow.nodes;
+    connections = flow.connections;
+    nextNodeId = Math.max(0, ...nodes.map(n => n.id)) + 1;
 
     renderCanvas();
     renderInspector();
