@@ -1,12 +1,23 @@
 // ---------------------------------------------------------
-// AUTHENTICATION, REMOTE BACKEND & TEACHER DASHBOARD UI (PHASE 5B)
+// AUTHENTICATION, BACKEND (REMOTE / SUPABASE) & TEACHER DASHBOARD UI
 // ---------------------------------------------------------
 
+function getAuthActiveApi() {
+  const mode = getApiMode();
+  if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') return SupabaseApi;
+  if (mode === 'remote') return RemoteApi;
+  return LocalApi;
+}
+
 async function initAuthAndBackendUi() {
-  // ตรวจสอบเซสชันผู้ใช้ปัจจุบันถ้าอยู่ในโหมด Remote
-  if (getApiMode() === 'remote') {
+  const mode = getApiMode();
+  if (mode === 'remote') {
     try {
       await RemoteApi.getMe();
+    } catch (e) {}
+  } else if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') {
+    try {
+      await SupabaseApi.getMe();
     } catch (e) {}
   }
 
@@ -21,9 +32,25 @@ function updateBackendStatusUi() {
   if (!badge) return;
 
   const mode = getApiMode();
-  const user = RemoteApi.getCurrentUser();
+  const api = getAuthActiveApi();
+  const user = api.getCurrentUser ? api.getCurrentUser() : null;
 
-  if (mode === 'remote' && user) {
+  if (mode === 'supabase' && user) {
+    const isTeacher = user.role === 'teacher';
+    badge.innerHTML = `
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium cursor-pointer hover:bg-emerald-900/60 transition" onclick="openAuthModal()">
+        <span>☁️</span>
+        <span class="truncate max-w-[120px]">${escapeHtml(user.displayName || user.username)}</span>
+        <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-200">${isTeacher ? 'ผู้สอน (Supabase)' : 'Supabase Cloud'}</span>
+      </div>
+    `;
+  } else if (mode === 'supabase') {
+    badge.innerHTML = `
+      <div class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-cyan-950/50 border border-cyan-500/30 text-cyan-300 text-xs font-medium cursor-pointer hover:bg-cyan-900/50 transition" onclick="openAuthModal()">
+        <span>☁️</span> <span>Supabase (ยังไม่ล็อกอิน)</span>
+      </div>
+    `;
+  } else if (mode === 'remote' && user) {
     const isTeacher = user.role === 'teacher';
     badge.innerHTML = `
       <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium cursor-pointer hover:bg-emerald-900/60 transition" onclick="openAuthModal()">
@@ -49,8 +76,9 @@ function updateBackendStatusUi() {
 
 function openAuthModal() {
   const modal = document.getElementById('auth-modal');
-  const user = RemoteApi.getCurrentUser();
   const mode = getApiMode();
+  const api = getAuthActiveApi();
+  const user = api.getCurrentUser ? api.getCurrentUser() : null;
 
   document.getElementById('auth-user-view').classList.toggle('hidden', !user);
   document.getElementById('auth-login-view').classList.toggle('hidden', !!user);
@@ -65,8 +93,10 @@ function openAuthModal() {
   // Radio button mode
   const localRadio = document.getElementById('backend-mode-local');
   const remoteRadio = document.getElementById('backend-mode-remote');
+  const supabaseRadio = document.getElementById('backend-mode-supabase');
   if (localRadio) localRadio.checked = mode === 'local';
   if (remoteRadio) remoteRadio.checked = mode === 'remote';
+  if (supabaseRadio) supabaseRadio.checked = mode === 'supabase';
 
   modal.classList.remove('hidden');
 }
@@ -92,13 +122,18 @@ async function handleLogin(e) {
   const userEl = document.getElementById('login-username');
   const passEl = document.getElementById('login-password');
   const errEl = document.getElementById('auth-error-msg');
+  const mode = getApiMode();
 
   try {
     errEl.classList.add('hidden');
-    await RemoteApi.login(userEl.value.trim(), passEl.value);
-    setApiMode('remote');
+    if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') {
+      await SupabaseApi.login(userEl.value.trim(), passEl.value);
+    } else {
+      await RemoteApi.login(userEl.value.trim(), passEl.value);
+      setApiMode('remote');
+    }
     closeAuthModal();
-    alert('เข้าสู่ระบบเซิร์ฟเวอร์สำเร็จ! ระบบได้สลับเป็นโหมด Remote Backend เรียบร้อยแล้ว');
+    alert('เข้าสู่ระบบสำเร็จเรียบร้อยแล้ว!');
     location.reload();
   } catch (err) {
     errEl.textContent = `❌ ${err.message}`;
@@ -113,13 +148,17 @@ async function handleRegister(e) {
   const nameEl = document.getElementById('reg-displayname');
   const roleEl = document.getElementById('reg-role');
   const errEl = document.getElementById('auth-error-msg');
+  const mode = getApiMode();
 
   try {
     errEl.classList.add('hidden');
-    // บทบาทผู้สอนต้องแนบรหัส server จะเป็นผู้ตัดสิน (ไม่เชื่อ role ที่ฝั่งผู้ใช้ส่งมา)
     const teacherCode = roleEl.value === 'teacher' ? document.getElementById('reg-teacher-code').value : '';
-    await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
-    setApiMode('remote');
+    if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') {
+      await SupabaseApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
+    } else {
+      await RemoteApi.register(userEl.value.trim(), passEl.value, nameEl.value.trim(), teacherCode);
+      setApiMode('remote');
+    }
     closeAuthModal();
     alert('สมัครสมาชิกและเข้าสู่ระบบเรียบร้อยแล้ว!');
     location.reload();
@@ -143,7 +182,10 @@ async function quickLoginDemo(role) {
 }
 
 async function handleLogout() {
-  await RemoteApi.logout();
+  const api = getAuthActiveApi();
+  if (api.logout) {
+    await api.logout();
+  }
   updateBackendStatusUi();
   closeAuthModal();
   alert('ออกจากระบบเรียบร้อยแล้ว');
@@ -153,23 +195,29 @@ async function handleLogout() {
 function handleBackendModeChange(newMode) {
   setApiMode(newMode);
   updateBackendStatusUi();
-  alert(newMode === 'remote' 
-    ? 'สลับเป็นโหมดเซิร์ฟเวอร์ Remote API แล้ว (บันทึกข้อมูลและตรวจคำตอบผ่าน Backend SQLite)' 
-    : 'สลับเป็นโหมด LocalStorage แล้ว (ข้อมูลบันทึกในเบราว์เซอร์เครื่องนี้เท่านั้น)');
+  if (newMode === 'supabase') {
+    alert('สลับเป็นโหมด Supabase Cloud แล้ว (เชื่อมต่อฐานข้อมูลและ Auth บนคลาวด์)');
+  } else if (newMode === 'remote') {
+    alert('สลับเป็นโหมดเซิร์ฟเวอร์ Remote API แล้ว (บันทึกข้อมูลและตรวจคำตอบผ่าน Backend SQLite)');
+  } else {
+    alert('สลับเป็นโหมด LocalStorage แล้ว (ข้อมูลบันทึกในเบราว์เซอร์เครื่องนี้เท่านั้น)');
+  }
 }
 
-// ซิงค์ข้อมูล Local ขึ้น Server
+// ซิงค์ข้อมูล Local ขึ้น Server / Supabase
 async function handleSyncLocalToServer() {
-  const user = RemoteApi.getCurrentUser();
+  const api = getAuthActiveApi();
+  const user = api.getCurrentUser ? api.getCurrentUser() : null;
   if (!user) {
     alert('กรุณาเข้าสู่ระบบก่อนทำการซิงค์ข้อมูลขึ้นเซิร์ฟเวอร์ครับ');
     return;
   }
 
-  if (!confirm('คุณต้องการนำ Flow และโปรเจกต์จากเครื่องนี้ (LocalStorage) ขึ้นไปบันทึกบนบัญชีของคุณใช่หรือไม่?')) return;
+  const modeName = getApiMode() === 'supabase' ? 'Supabase Cloud' : 'Server';
+  if (!confirm(`คุณต้องการนำ Flow และโปรเจกต์จากเครื่องนี้ (LocalStorage) ขึ้นไปบันทึกบนบัญชี ${modeName} ของคุณใช่หรือไม่?`)) return;
 
   try {
-    const res = await RemoteApi.syncLocalToServer();
+    const res = await api.syncLocalToServer();
     alert(`ซิงค์ข้อมูลสำเร็จ!\n• Flow ด่านที่ทำ: ${res.syncedLevels} ด่าน\n• โปรเจกต์ Studio: ${res.syncedProjects} โปรเจกต์\n• ด่านสร้างเอง: ${res.syncedCustom} ด่าน`);
   } catch (err) {
     alert(`การซิงค์ข้อมูลขัดข้อง: ${err.message}`);
@@ -186,7 +234,8 @@ async function openTeacherDashboard() {
   modal.classList.remove('hidden');
 
   try {
-    const data = await RemoteApi.getTeacherOverview();
+    const api = getAuthActiveApi();
+    const data = await api.getTeacherOverview();
     renderTeacherDashboard(data);
   } catch (err) {
     body.innerHTML = `<div class="p-6 text-center text-rose-300">เกิดข้อผิดพลาด: ${err.message}</div>`;
@@ -285,7 +334,8 @@ async function openShareStudioModal() {
       nextNodeId
     };
     const title = currentStudioProject ? currentStudioProject.name : 'Shared Workflow';
-    const res = await RemoteApi.shareFlow('project', title, data);
+    const api = getAuthActiveApi();
+    const res = await api.shareFlow('project', title, data);
 
     const fullUrl = `${window.location.origin}${window.location.pathname}?share=${res.code}`;
     inputEl.value = fullUrl;
@@ -317,7 +367,8 @@ async function checkIncomingShare() {
   if (!shareCode) return;
 
   try {
-    const res = await RemoteApi.getShare(shareCode);
+    const api = getAuthActiveApi();
+    const res = await api.getShare(shareCode);
     if (!res.ok) return;
 
     setTimeout(async () => {

@@ -540,7 +540,9 @@ function getApiMode() {
 }
 
 function setApiMode(mode) {
-  writeStore(API_MODE_KEY, mode === 'remote' ? 'remote' : 'local');
+  const valid = ['local', 'remote', 'supabase'];
+  const newMode = valid.includes(mode) ? mode : 'local';
+  writeStore(API_MODE_KEY, newMode);
   if (typeof updateBackendStatusUi === 'function') {
     updateBackendStatusUi();
   }
@@ -548,7 +550,9 @@ function setApiMode(mode) {
 
 function getActiveApi() {
   const mode = getApiMode();
-  return mode === 'remote' ? RemoteApi : LocalApi;
+  if (mode === 'supabase' && typeof SupabaseApi !== 'undefined') return SupabaseApi;
+  if (mode === 'remote') return RemoteApi;
+  return LocalApi;
 }
 
 // Global Api Proxy: สลับ backend ได้อัตโนมัติโดยที่ UI ไม่ต้องเขียนแก้ใหม่!

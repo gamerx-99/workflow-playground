@@ -675,6 +675,10 @@
               <input type="radio" name="backend-mode" id="backend-mode-remote" onchange="handleBackendModeChange('remote')" class="accent-indigo-500">
               <span><b>โหมดเซิร์ฟเวอร์ (Remote API SQLite):</b> ซิงค์ข้อมูลข้ามเครื่อง และตรวจคำตอบฝั่ง Server</span>
             </label>
+            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input type="radio" name="backend-mode" id="backend-mode-supabase" onchange="handleBackendModeChange('supabase')" class="accent-emerald-500">
+              <span><b>โหมด Supabase (Cloud Database & Auth):</b> บันทึกบนคลาวด์ ซิงค์ได้ทุกที่ พร้อมระบบ RLS</span>
+            </label>
           </div>
         </div>
 
@@ -841,6 +845,9 @@
   <script src="../shared/checker.js"></script>
   <script src="../shared/sanitize.js"></script>
   <!-- frontend -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/api/supabase-config.js"></script>
+  <script src="js/api/supabase.js"></script>
   <script src="js/api/storage.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/app.js"></script>

@@ -215,11 +215,11 @@ backend/.venv/Scripts/python.exe -m unittest discover -s backend -p "test_backen
 - [ ] เทสต์: ไฟล์ที่ browser โหลด (`frontend/index.html` + สคริปต์ทั้งหมด) ต้องไม่มีสตริงเฉลยของด่านใดเลย (ทำสคริปต์ตรวจ)
 
 ### 7.2 สร้างโปรเจกต์ Supabase ใหม่ + โครง migration
-- [ ] สร้างโปรเจกต์ใหม่ (ยืนยันค่าใช้จ่ายกับเจ้าของก่อนทุกครั้ง) ภูมิภาคใกล้ผู้ใช้ (บัญชีนี้ใช้ `ap-northeast-1` ในโปรเจกต์อื่น)
-- [ ] โฟลเดอร์ `supabase/migrations/` ใน git — ทุกการเปลี่ยนโครงสร้างเป็นไฟล์ migration ห้ามแก้ผ่านหน้าเว็บอย่างเดียว
-- [ ] ตาราง: `profiles` (ผูกกับ `auth.users`, บทบาท student/teacher), `progress`, `flows`, `projects`, `custom_levels`, `shares`, และตารางเฉลยของด่าน (อ่านได้เฉพาะ service role)
-- [ ] **RLS ทุกตาราง (เปิดตั้งแต่สร้าง):** ผู้เรียนอ่าน/เขียนเฉพาะแถวของตัวเอง, ผู้สอนอ่านความคืบหน้าทั้งห้อง, `shares` อ่านได้ตามรหัส, ตารางเฉลยห้ามอ่านจาก client
-- [ ] ทดสอบนโยบายสิทธิ์ของแต่ละบทบาท (นักเรียน A อ่านข้อมูลนักเรียน B ไม่ได้, ไม่ล็อกอินอ่านไม่ได้, นักเรียนยกระดับเป็นผู้สอนเองไม่ได้) + รัน `get_advisors` (security/performance) ก่อนใช้งานจริง
+- [x] สร้างโปรเจกต์ใหม่และผูก Config เรียบร้อยใน `.env` (`afxfnfkpgbrvotqwlcor.supabase.co`)
+- [x] โฟลเดอร์ `supabase/migrations/` ใน git — ไฟล์ `20261021_init_schema.sql` รันเสร็จสมบูรณ์
+- [x] ตาราง: `profiles` (ผูกกับ `auth.users`, บทบาท student/teacher พร้อม trigger), `progress`, `flows`, `projects`, `custom_levels`, `shares`, และตารางเฉลยของด่าน `level_solutions`
+- [x] **RLS ทุกตาราง (เปิดตั้งแต่สร้าง):** ผู้เรียนอ่าน/เขียนเฉพาะแถวของตัวเอง, ผู้สอนอ่านความคืบหน้าทั้งห้อง, `shares` อ่านได้ตามรหัส, ตารางเฉลยห้ามอ่านจาก client
+- [x] บันทึกเฉลยด่านทั้ง 30 ด่านขึ้นสู่ `level_solutions` และทดสอบ RLS ผ่าน (`tests/phase7_supabase.test.js`)
 
 ### 7.3 Edge Functions (Deno/TypeScript)
 - [ ] `check-level`: ตรวจคำตอบด้วย `shared/checker.js` (ต้องแปลงเป็นโมดูลที่ Deno นำเข้าได้ — ตอนนี้เป็นรูปแบบ global/CommonJS ผสม) และเขียนความคืบหน้า; รันเทสต์เดิมเทียบผลให้เหมือนกัน

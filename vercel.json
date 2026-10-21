@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/shared/:match*", "destination": "/shared/:match*" },
+    { "source": "/frontend/:match*", "destination": "/frontend/:match*" },
+    { "source": "/css/:match*", "destination": "/frontend/css/:match*" },
+    { "source": "/js/:match*", "destination": "/frontend/js/:match*" },
+    { "source": "/:match*", "destination": "/frontend/:match*" }
+  ]
+}
