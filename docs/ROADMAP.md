@@ -87,6 +87,16 @@
 
 ทำเมื่อต้องการผู้ใช้หลายคน หรือใช้สอนเป็นห้องเรียน
 
+**5a — AI ด้วย Google Antigravity SDK** (backend Python ใน `backend/`)
+- [x] AI Coach: `POST /coach` ให้คำใบ้จาก flow + ผลตรวจ (ปุ่มในหน้าผลตรวจ, fallback เมื่อไม่มี backend/key)
+- [x] agent จำกัดสิทธิ์: มี tool `finish` อย่างเดียว, จำกัด token, ตรวจขนาดอินพุต
+- [ ] **ยังไม่ได้ทดสอบกับ Gemini จริง** (ต้องใส่ `GEMINI_API_KEY` ใน `backend/.env` ก่อน) — ทดสอบแล้วถึงขั้นที่ SDK เริ่มทำงานและ Gemini ปฏิเสธ key ปลอม
+- [ ] AI รีวิว flow ในโหมด Studio (วิจารณ์ดีไซน์ที่กฎตรวจไม่เจอ)
+- [ ] AI ช่วยสร้างด่านจากคำอธิบายภาษาไทย (structured output → flow เฉลย + checks + คำใบ้) — ช่วยเร่ง Phase 3
+- [ ] บล็อก AI ในตัวจำลองเรียก LLM จริง (ตอนนี้เป็นกฎคำสำคัญ)
+- [ ] พิมพ์ภาษาไทยแล้วให้ AI วางบล็อกบนกระดาน
+
+**5b — ข้อมูลและผู้ใช้**
 - [ ] เลือกเทคโนโลยี: Supabase (Postgres + Auth + Edge Functions) หรือ Node (Hono/Express) + SQLite
 - [ ] API ตามเมธอดของ `LocalApi`: `getLevels`, `loadFlow`, `saveFlow`, `checkLevel`, `getProgress`
 - [ ] ตรวจคำตอบฝั่ง server ด้วย `shared/checker.js` ตัวเดียวกัน (ซ่อนเฉลยจากผู้เรียน)

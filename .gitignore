@@ -39,3 +39,8 @@ desktop.ini
 *.tmp
 *.bak
 *.swp
+
+# Python backend
+backend/.venv/
+__pycache__/
+*.pyc

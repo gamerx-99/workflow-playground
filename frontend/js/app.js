@@ -25,6 +25,8 @@ let showCursorRing = true;
 
 let passedLevelIds = [];
 let lastRun = null; // ผลจำลองการทำงานล่าสุด (ล้างทิ้งทุกครั้งที่แก้ flow)
+let lastCheckResult = null; // ผลส่งตรวจล่าสุด (ใช้ส่งให้ AI Coach)
+const attemptsByLevel = {}; // จำนวนครั้งที่ส่งตรวจแล้วยังไม่ผ่าน ต่อด่าน — ยิ่งหลายครั้งโค้ชยิ่งบอกชัดขึ้น
 
 const MODE_LABELS = {
   build: '🛠 ต่อเอง',

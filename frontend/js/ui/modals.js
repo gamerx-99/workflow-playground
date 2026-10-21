@@ -50,10 +50,13 @@ async function submitLevelCheck() {
 }
 
 function showCheckResult(result) {
+  lastCheckResult = result;
   if (result.passed && !passedLevelIds.includes(currentLevelId)) {
     passedLevelIds.push(currentLevelId);
     renderLevelTabs();
   }
+  if (!result.passed) attemptsByLevel[currentLevelId] = (attemptsByLevel[currentLevelId] || 0) + 1;
+  document.getElementById('coach-btn').classList.toggle('hidden', result.passed);
 
   document.getElementById('level-check-header').innerHTML = `
     <div class="flex items-center gap-2.5">
@@ -81,9 +84,44 @@ function showCheckResult(result) {
         </div>
       </div>
     `).join('')}
+    <div id="coach-box" class="hidden"></div>
   `;
 
   document.getElementById('level-check-modal').classList.remove('hidden');
+}
+
+const COACH_FALLBACK_TEXT = {
+  offline: 'ยังไม่ได้เปิด backend ของ AI Coach — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ (วิธีเปิดอยู่ใน README หัวข้อ AI Coach)',
+  no_api_key: 'เปิด backend แล้ว แต่ยังไม่ได้ตั้ง GEMINI_API_KEY ใน backend/.env — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
+  busy: 'โค้ชกำลังช่วยคนอื่นอยู่ ลองใหม่อีกครั้งในอีกสักครู่นะครับ',
+  timeout: 'โค้ชใช้เวลานานเกินไป ลองใหม่อีกครั้งนะครับ',
+  failed: 'โค้ชตอบไม่ได้ในตอนนี้ ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ'
+};
+
+async function askCoach() {
+  const box = document.getElementById('coach-box');
+  const btn = document.getElementById('coach-btn');
+  box.classList.remove('hidden');
+  box.innerHTML = '<div class="p-3 rounded-xl bg-violet-950/40 border border-violet-500/30 text-violet-200 animate-pulse">🧑‍🏫 โค้ชกำลังดู flow ของคุณ...</div>';
+  btn.disabled = true;
+
+  const out = await Api.coach(currentLevelId, { nodes, connections }, lastCheckResult, attemptsByLevel[currentLevelId] || 1);
+  btn.disabled = false;
+
+  if (!out.ok) {
+    box.innerHTML = `<div class="p-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-300">${escapeHtml(COACH_FALLBACK_TEXT[out.reason] || COACH_FALLBACK_TEXT.failed)}</div>`;
+    return;
+  }
+
+  const r = out.reply;
+  box.innerHTML = `
+    <div class="p-3.5 rounded-xl bg-violet-950/40 border border-violet-500/40 space-y-2 mt-2">
+      <div class="font-bold text-violet-200">🧑‍🏫 คำแนะนำจากโค้ช AI</div>
+      <div class="text-slate-200"><b>ตอนนี้:</b> ${escapeHtml(r.diagnosis)}</div>
+      <div class="text-slate-100"><b>💡 คำใบ้:</b> ${escapeHtml(r.hint)}</div>
+      <div class="text-emerald-200"><b>👉 ลองทำต่อ:</b> ${escapeHtml(r.next_step)}</div>
+      <div class="text-[11px] text-slate-400">📚 ${escapeHtml(r.concept)}</div>
+    </div>`;
 }
 
 function closeLevelCheckModal() {

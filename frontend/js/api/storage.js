@@ -6,6 +6,7 @@
 // ---------------------------------------------------------
 const STORAGE_KEY = 'workflow_automation_lab_smart_var_v3';
 const PROGRESS_KEY = 'workflow_automation_lab_progress_v1';
+const COACH_BASE_URL = 'http://127.0.0.1:8787'; // backend/server.py
 
 function readStore(key, fallback) {
   try {
@@ -67,6 +68,39 @@ const LocalApi = {
   // GET /progress
   async getProgress() {
     return readStore(PROGRESS_KEY, { passed: [] });
+  },
+
+  // POST /coach (backend Python + Antigravity SDK) — คืน { ok, reply } หรือ { ok:false, reason }
+  // reason: offline | no_api_key | busy | timeout | failed
+  async coach(levelId, flow, checkResult, attempt) {
+    const level = LEVELS.find(l => l.id === levelId);
+    const body = {
+      level_id: levelId,
+      level_title: level.title,
+      level_desc: level.desc,
+      mode: level.mode || 'build',
+      flow: { nodes: flow.nodes, connections: flow.connections },
+      check_items: checkResult.items.map(i => ({ ok: i.ok, label: i.label, detail: i.detail || '' })),
+      attempt
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 70000);
+    try {
+      const res = await fetch(`${COACH_BASE_URL}/coach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      if (res.ok) return { ok: true, reply: await res.json() };
+      const err = (await res.json().catch(() => ({}))).error;
+      const reasons = { no_api_key: 'no_api_key', busy: 'busy', timeout: 'timeout' };
+      return { ok: false, reason: reasons[err] || 'failed' };
+    } catch (e) {
+      return { ok: false, reason: e.name === 'AbortError' ? 'timeout' : 'offline' };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 };
 
