@@ -10,7 +10,7 @@
 | 2 | หลายรูปแบบ + จำลองการทำงาน (Run) | 🟡 ทำแล้วส่วนใหญ่ (เหลือโหมด order) |
 | 3 | เพิ่มแบบทดสอบเป็น 30 ด่าน | ✅ เสร็จแล้ว (30 ด่าน 5 สาย) |
 | 4 | UI ใหม่ + โหมดฝึก / ออกแบบ (Studio) | ✅ เสร็จแล้ว |
-| 5 | Backend (ทางเลือก) | 🟡 5a (AI Coach) เสร็จ, 5b ยังไม่เริ่ม |
+| 5 | Backend (5a AI + 5b Data & Users) | ✅ เสร็จแล้ว (5a AI Coach + 5b Node SQLite API) |
 | 6 | รองรับมือถือ (หน้า `mobile.html` แยก + นิ้วสัมผัส) | ⬜ วางแผนแล้ว — ดูรายละเอียดด้านล่าง |
 
 ---
@@ -26,7 +26,7 @@
 - [x] ลบไฟล์เดิม `workflow-playground.html`
 
 **ค้างจากเฟสนี้**
-- [ ] ทดสอบเปิด `frontend/index.html` แบบดับเบิลคลิก (`file://`) — ทดสอบแล้วเฉพาะผ่าน localhost
+- [x] ทดสอบเปิด `frontend/index.html` แบบดับเบิลคลิก (`file://`)
 - [x] เริ่มใช้ git + ขึ้น GitHub แล้ว
 
 ## Phase 2 — หลายรูปแบบ (ข้อ 1)
@@ -105,14 +105,14 @@
 - [ ] บล็อก AI ในตัวจำลองเรียก LLM จริง (ตอนนี้เป็นกฎคำสำคัญ)
 - [ ] พิมพ์ภาษาไทยแล้วให้ AI วางบล็อกบนกระดาน
 
-**5b — ข้อมูลและผู้ใช้**
-- [ ] เลือกเทคโนโลยี: Supabase (Postgres + Auth + Edge Functions) หรือ Node (Hono/Express) + SQLite
-- [ ] API ตามเมธอดของ `LocalApi`: `getLevels`, `loadFlow`, `saveFlow`, `checkLevel`, `getProgress`
-- [ ] ตรวจคำตอบฝั่ง server ด้วย `shared/checker.js` ตัวเดียวกัน (ซ่อนเฉลยจากผู้เรียน)
-- [ ] บัญชีผู้ใช้ + ความคืบหน้าข้ามเครื่อง
-- [ ] แชร์ด่านที่สร้างใน Studio ผ่านลิงก์
-- [ ] หน้าดูคะแนนรวมสำหรับผู้สอน
-- [ ] สลับ `const Api = RemoteApi` ใน `frontend/js/api/storage.js`
+**5b — ข้อมูลและผู้ใช้ (Node.js + SQLite Backend)** ✅
+- [x] เลือกเทคโนโลยี: Node.js (Built-in `node:sqlite` + `node:http`, Zero external dependencies)
+- [x] API ตามเมธอดของ `LocalApi`: `getLevels`, `loadFlow`, `saveFlow`, `checkLevel`, `getProgress`
+- [x] ตรวจคำตอบฝั่ง server ด้วย `shared/checker.js` ตัวเดียวกัน (ซ่อน `template` เฉลยจากผู้เรียน เพื่อป้องกันการเปิดดูใน DevTools)
+- [x] บัญชีผู้ใช้ + ความคืบหน้าข้ามเครื่อง (ตาราง `users`, `sessions`, `progress`, `flows`)
+- [x] แชร์ด่าน/Flow ที่สร้างใน Studio ผ่านลิงก์ (`POST /api/share` และ `?share=<code>`)
+- [x] หน้าดูคะแนนรวมสำหรับผู้สอน (Teacher Classroom Dashboard: สรุปภาพรวมและสถิติรายบุคคล)
+- [x] สลับ `const Api = RemoteApi` อัตโนมัติด้วย Dynamic Proxy ใน `frontend/js/api/storage.js` พร้อมปุ่มซิงค์ Local ขึ้น Server
 
 ## Phase 6 — รองรับมือถือ (หน้าแยก) ⬜
 

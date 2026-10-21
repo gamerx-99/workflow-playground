@@ -56,6 +56,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   // เริ่มต้นที่หน้าแรก (Home View)
   await switchView('home');
 
+  // ตรวจสอบสถานะการเชื่อมต่อ Backend / บัญชีผู้ใช้ (Phase 5b)
+  if (typeof initAuthAndBackendUi === 'function') {
+    await initAuthAndBackendUi();
+  }
+
   // ตรวจสอบเปิดทัวร์แนะนำอัตโนมัติหากเป็นการเข้าใช้ครั้งแรก
   await checkAutoOpenTour();
 

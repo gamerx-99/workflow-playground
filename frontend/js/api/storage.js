@@ -1,8 +1,6 @@
 // ---------------------------------------------------------
 // API LAYER — ตัวกลางระหว่างหน้าเว็บกับแหล่งข้อมูล
-// ตอนนี้ใช้ localStorage ในเบราว์เซอร์ (ทำงานออฟไลน์ได้)
-// เมื่อมี backend: เขียน object ใหม่ที่มีเมธอดเหมือนกันแต่เรียก fetch('/api/...') แล้วสลับ Api = RemoteApi
-// ทุกเมธอดคืน Promise เพื่อให้สลับไปใช้ backend จริงได้โดยไม่ต้องแก้ส่วน UI
+// รองรับทั้งโหมด Local (LocalStorage) และ Remote (Node.js + SQLite Backend Phase 5b)
 // ---------------------------------------------------------
 const STORAGE_KEY = 'workflow_automation_lab_smart_var_v3';
 const PROGRESS_KEY = 'workflow_automation_lab_progress_v1';
@@ -10,7 +8,12 @@ const STUDIO_PROJECTS_KEY = 'workflow_automation_lab_studio_projects_v1';
 const STUDIO_ACTIVE_ID_KEY = 'workflow_automation_lab_studio_active_id_v1';
 const CUSTOM_LEVELS_KEY = 'workflow_automation_lab_custom_levels_v1';
 const TOUR_SEEN_KEY = 'workflow_automation_lab_tour_seen_v1';
-const COACH_BASE_URL = 'http://127.0.0.1:8787'; // backend/server.py
+
+const COACH_BASE_URL = 'http://127.0.0.1:8787'; // backend/server.py (Python)
+const REMOTE_API_BASE = 'http://127.0.0.1:8788'; // backend/api_server.js (Node SQLite)
+const AUTH_TOKEN_KEY = 'workflow_auth_token_v1';
+const AUTH_USER_KEY = 'workflow_auth_user_v1';
+const API_MODE_KEY = 'workflow_api_mode_v1'; // 'local' | 'remote'
 
 function readStore(key, fallback) {
   try {
@@ -42,18 +45,21 @@ function readCustomLevels() {
     try {
       return [cleanCustomLevel(raw)];
     } catch (e) {
-      return []; // ข้ามด่านที่พัง/ไม่ปลอดภัย แทนที่จะทำให้ทั้งแอปล่ม
+      return [];
     }
   });
 }
 
+// ---------------------------------------------------------
+// 1. LOCAL API (โหมดออฟไลน์ / LocalStorage)
+// ---------------------------------------------------------
 const LocalApi = {
-  // GET /levels (รวมด่านหลัก 30 ด่าน + ด่านสร้างเอง Custom)
+  mode: 'local',
+
   async getLevels() {
     return [...LEVELS, ...readCustomLevels()];
   },
 
-  // GET /levels/:id/flow
   async loadFlow(levelId) {
     const saved = readStore(STORAGE_KEY, {})[levelId];
     if (!saved || !Array.isArray(saved.nodes)) return null;
@@ -64,15 +70,12 @@ const LocalApi = {
     };
   },
 
-  // PUT /levels/:id/flow
   async saveFlow(levelId, flow) {
     const all = readStore(STORAGE_KEY, {});
     all[levelId] = flow;
     writeStore(STORAGE_KEY, all);
   },
 
-  // POST /levels/:id/check — ตรวจคำตอบ และบันทึกว่าผ่านด่านแล้วถ้าผ่าน
-  // ด่านทายผล (predict) ส่ง answers แทน flow
   async checkLevel(levelId, flow, answers) {
     const all = await this.getLevels();
     const level = all.find(l => String(l.id) === String(levelId));
@@ -90,13 +93,10 @@ const LocalApi = {
     return result;
   },
 
-  // GET /progress
   async getProgress() {
     return readStore(PROGRESS_KEY, { passed: [] });
   },
 
-  // --- STUDIO PROJECTS MANAGEMENT ---
-  // ดึงรายการโปรเจกต์ทั้งหมดใน Studio
   async listProjects() {
     const list = readStore(STUDIO_PROJECTS_KEY, null);
     if (!list || !Array.isArray(list) || list.length === 0) {
@@ -172,27 +172,21 @@ const LocalApi = {
     return list;
   },
 
-  // --- CUSTOM LEVELS MANAGEMENT ---
   async getCustomLevels() {
     return readCustomLevels();
   },
 
-  // บันทึกด่านที่ผู้ใช้สร้าง/นำเข้า — ผ่าน sanitizeCustomLevel เสมอ (ไฟล์ด่านที่แชร์กันเป็นข้อมูลที่ไม่น่าเชื่อถือ)
-  // asNew: true (ตอนนำเข้าไฟล์) = ออก id ใหม่เสมอ กันไฟล์ของคนอื่นไปทับด่านของเราที่ id ซ้ำกัน
-  // ถ้าข้อมูลไม่ถูกต้องจะ throw Error ข้อความภาษาไทย
-  async saveCustomLevel(customLevel, { asNew = false } = {}) {
+  async saveCustomLevel(customLevel) {
+    const cleaned = cleanCustomLevel(customLevel);
     const list = await this.getCustomLevels();
-    const levelToSave = cleanCustomLevel(asNew ? { ...customLevel, id: undefined } : customLevel);
-    levelToSave.updatedAt = Date.now();
-    const id = levelToSave.id;
-    const idx = list.findIndex(l => String(l.id) === String(id));
+    const idx = list.findIndex(l => String(l.id) === String(cleaned.id));
     if (idx >= 0) {
-      list[idx] = levelToSave;
+      list[idx] = cleaned;
     } else {
-      list.push(levelToSave);
+      list.push(cleaned);
     }
     writeStore(CUSTOM_LEVELS_KEY, list);
-    return levelToSave;
+    return cleaned;
   },
 
   async deleteCustomLevel(id) {
@@ -202,7 +196,6 @@ const LocalApi = {
     return list;
   },
 
-  // --- TOUR ONBOARDING ---
   async isTourSeen() {
     return !!readStore(TOUR_SEEN_KEY, false);
   },
@@ -211,7 +204,6 @@ const LocalApi = {
     writeStore(TOUR_SEEN_KEY, seen);
   },
 
-  // POST /coach (backend Python + Antigravity SDK)
   async coach(levelId, flow, checkResult, attempt) {
     const all = await this.getLevels();
     const level = all.find(l => String(l.id) === String(levelId));
@@ -245,4 +237,326 @@ const LocalApi = {
   }
 };
 
-const Api = LocalApi;
+// ---------------------------------------------------------
+// 2. REMOTE API (Phase 5b: Node.js + SQLite Server)
+// ---------------------------------------------------------
+const RemoteApi = {
+  mode: 'remote',
+
+  getToken() {
+    return readStore(AUTH_TOKEN_KEY, null);
+  },
+
+  setToken(token) {
+    writeStore(AUTH_TOKEN_KEY, token);
+  },
+
+  getCurrentUser() {
+    return readStore(AUTH_USER_KEY, null);
+  },
+
+  setCurrentUser(user) {
+    writeStore(AUTH_USER_KEY, user);
+  },
+
+  async fetchApi(path, options = {}) {
+    const token = this.getToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    };
+
+    const res = await fetch(`${REMOTE_API_BASE}${path}`, {
+      ...options,
+      headers
+    });
+
+    const data = await res.json().catch(() => ({ ok: false, error: 'Cannot parse server response' }));
+    if (!res.ok && !data.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    return data;
+  },
+
+  // Auth Methods
+  async register(username, password, displayName, role = 'student') {
+    const data = await this.fetchApi('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, displayName, role })
+    });
+    if (data.ok && data.token) {
+      this.setToken(data.token);
+      this.setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  async login(username, password) {
+    const data = await this.fetchApi('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+    if (data.ok && data.token) {
+      this.setToken(data.token);
+      this.setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  async logout() {
+    try {
+      await this.fetchApi('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    this.setToken(null);
+    this.setCurrentUser(null);
+  },
+
+  async getMe() {
+    try {
+      const data = await this.fetchApi('/api/auth/me');
+      if (data.ok) {
+        this.setCurrentUser(data.user);
+        return data.user;
+      }
+    } catch (e) {
+      this.setToken(null);
+      this.setCurrentUser(null);
+    }
+    return null;
+  },
+
+  // Levels & Progress
+  async getLevels() {
+    try {
+      const data = await this.fetchApi('/api/levels');
+      return data.levels;
+    } catch (e) {
+      // Fallback local if server offline
+      return LocalApi.getLevels();
+    }
+  },
+
+  async loadFlow(levelId) {
+    try {
+      const data = await this.fetchApi(`/api/levels/${levelId}/flow`);
+      return data.flow;
+    } catch (e) {
+      return LocalApi.loadFlow(levelId);
+    }
+  },
+
+  async saveFlow(levelId, flow) {
+    try {
+      await this.fetchApi(`/api/levels/${levelId}/flow`, {
+        method: 'PUT',
+        body: JSON.stringify(flow)
+      });
+    } catch (e) {
+      await LocalApi.saveFlow(levelId, flow);
+    }
+  },
+
+  async checkLevel(levelId, flow, answers) {
+    try {
+      const data = await this.fetchApi(`/api/levels/${levelId}/check`, {
+        method: 'POST',
+        body: JSON.stringify({ flow, answers })
+      });
+      return data;
+    } catch (e) {
+      return LocalApi.checkLevel(levelId, flow, answers);
+    }
+  },
+
+  async getProgress() {
+    try {
+      const data = await this.fetchApi('/api/progress');
+      return { passed: data.passed || [] };
+    } catch (e) {
+      return LocalApi.getProgress();
+    }
+  },
+
+  // Studio Projects
+  async listProjects() {
+    try {
+      const data = await this.fetchApi('/api/projects');
+      if (data.projects && data.projects.length) return data.projects;
+      return LocalApi.listProjects();
+    } catch (e) {
+      return LocalApi.listProjects();
+    }
+  },
+
+  async getActiveProjectId() {
+    return LocalApi.getActiveProjectId();
+  },
+
+  async setActiveProjectId(id) {
+    return LocalApi.setActiveProjectId(id);
+  },
+
+  async getProject(id) {
+    const list = await this.listProjects();
+    return list.find(p => p.id === id) || null;
+  },
+
+  async saveProject(project) {
+    try {
+      await this.fetchApi(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(project)
+      });
+    } catch (e) {
+      await LocalApi.saveProject(project);
+    }
+    return project;
+  },
+
+  async createProject(name = 'โปรเจกต์ใหม่') {
+    try {
+      const data = await this.fetchApi('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      });
+      if (data.project) return data.project;
+    } catch (e) {}
+    return LocalApi.createProject(name);
+  },
+
+  async deleteProject(id) {
+    try {
+      await this.fetchApi(`/api/projects/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    return LocalApi.deleteProject(id);
+  },
+
+  // Custom Levels
+  async getCustomLevels() {
+    try {
+      const data = await this.fetchApi('/api/custom-levels');
+      return data.customLevels || [];
+    } catch (e) {
+      return LocalApi.getCustomLevels();
+    }
+  },
+
+  async saveCustomLevel(level) {
+    try {
+      const data = await this.fetchApi('/api/custom-levels', {
+        method: 'POST',
+        body: JSON.stringify(level)
+      });
+      if (data.level) return data.level;
+    } catch (e) {}
+    return LocalApi.saveCustomLevel(level);
+  },
+
+  async deleteCustomLevel(id) {
+    try {
+      await this.fetchApi(`/api/custom-levels/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    return LocalApi.deleteCustomLevel(id);
+  },
+
+  async isTourSeen() {
+    return LocalApi.isTourSeen();
+  },
+
+  async setTourSeen(seen) {
+    return LocalApi.setTourSeen(seen);
+  },
+
+  async coach(levelId, flow, checkResult, attempt) {
+    return LocalApi.coach(levelId, flow, checkResult, attempt);
+  },
+
+  // Share via Link / Code
+  async shareFlow(type, title, data) {
+    return this.fetchApi('/api/share', {
+      method: 'POST',
+      body: JSON.stringify({ type, title, data })
+    });
+  },
+
+  async getShare(code) {
+    return this.fetchApi(`/api/share/${code}`);
+  },
+
+  // Teacher Classroom Dashboard
+  async getTeacherOverview() {
+    return this.fetchApi('/api/teacher/overview');
+  },
+
+  // ซิงค์ข้อมูลจาก LocalStorage ขึ้น Server
+  async syncLocalToServer() {
+    const localProgress = await LocalApi.getProgress();
+    const localProjects = await LocalApi.listProjects();
+    const localCustomLevels = await LocalApi.getCustomLevels();
+
+    let syncedLevels = 0;
+    let syncedProjects = 0;
+    let syncedCustom = 0;
+
+    // 1. ซิงค์ flows ของแต่ละด่านที่เคยทำไว้
+    const allStore = readStore(STORAGE_KEY, {});
+    for (const [lvlId, flow] of Object.entries(allStore)) {
+      if (flow && flow.nodes && flow.nodes.length) {
+        await this.saveFlow(lvlId, flow);
+        syncedLevels++;
+      }
+    }
+
+    // 2. ซิงค์ Studio Projects
+    for (const proj of localProjects) {
+      if (proj.flow && proj.flow.nodes && proj.flow.nodes.length) {
+        await this.createProject(proj.name, proj.flow);
+        syncedProjects++;
+      }
+    }
+
+    // 3. ซิงค์ Custom Levels
+    for (const cl of localCustomLevels) {
+      await this.saveCustomLevel(cl);
+      syncedCustom++;
+    }
+
+    return {
+      ok: true,
+      syncedLevels,
+      syncedProjects,
+      syncedCustom
+    };
+  }
+};
+
+// ---------------------------------------------------------
+// 3. DYNAMIC API SWITCHER
+// ---------------------------------------------------------
+function getApiMode() {
+  return readStore(API_MODE_KEY, 'local');
+}
+
+function setApiMode(mode) {
+  writeStore(API_MODE_KEY, mode === 'remote' ? 'remote' : 'local');
+  if (typeof updateBackendStatusUi === 'function') {
+    updateBackendStatusUi();
+  }
+}
+
+function getActiveApi() {
+  const mode = getApiMode();
+  return mode === 'remote' ? RemoteApi : LocalApi;
+}
+
+// Global Api Proxy: สลับ backend ได้อัตโนมัติโดยที่ UI ไม่ต้องเขียนแก้ใหม่!
+const Api = new Proxy({}, {
+  get(_, prop) {
+    const target = getActiveApi();
+    if (typeof target[prop] === 'function') {
+      return target[prop].bind(target);
+    }
+    return target[prop];
+  }
+});

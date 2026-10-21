@@ -78,6 +78,9 @@
         <span>📋 ส่งตรวจ</span>
       </button>
 
+      <!-- Backend Connection / Auth Badge (Phase 5b) -->
+      <div id="backend-status-badge"></div>
+
       <button onclick="toggleRightPanel()" title="พับ/เปิดแผงตั้งค่าด้านขวา" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer">
         <span>ตั้งค่า ⇥</span>
       </button>
@@ -648,6 +651,175 @@
   </div>
 
 
+  <!-- ================= MODAL: AUTHENTICATION & BACKEND (PHASE 5B) ================= -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🌐</span>
+          <h2 class="font-bold text-base text-white">จัดการการเชื่อมต่อ & บัญชีผู้ใช้</h2>
+        </div>
+        <button onclick="closeAuthModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs">
+        <!-- MODE SELECTOR -->
+        <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+          <div class="font-bold text-slate-300">โหมดการบันทึกข้อมูล (Data Storage Mode):</div>
+          <div class="space-y-1.5">
+            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input type="radio" name="backend-mode" id="backend-mode-local" onchange="handleBackendModeChange('local')" class="accent-indigo-500">
+              <span><b>โหมดเครื่อง (Local Storage):</b> ทำงานออฟไลน์ ข้อมูลอยู่ในเครื่องนี้</span>
+            </label>
+            <label class="flex items-center gap-2 text-slate-300 cursor-pointer">
+              <input type="radio" name="backend-mode" id="backend-mode-remote" onchange="handleBackendModeChange('remote')" class="accent-indigo-500">
+              <span><b>โหมดเซิร์ฟเวอร์ (Remote API SQLite):</b> ซิงค์ข้อมูลข้ามเครื่อง และตรวจคำตอบฝั่ง Server</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- LOGGED-IN VIEW -->
+        <div id="auth-user-view" class="hidden space-y-3">
+          <div class="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-400">เข้าสู่ระบบในชื่อ:</span>
+              <span id="auth-logged-role" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">...</span>
+            </div>
+            <div id="auth-logged-name" class="text-lg font-bold text-white">...</div>
+          </div>
+
+          <div class="space-y-2 pt-1">
+            <button id="auth-teacher-dash-btn" onclick="openTeacherDashboard(); closeAuthModal();" class="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+              <span>📊 เปิดแดชบอร์ดห้องเรียน (Teacher Dashboard)</span>
+            </button>
+            <button onclick="handleSyncLocalToServer()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center justify-center gap-2 cursor-pointer transition">
+              <span>🔄 ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Server</span>
+            </button>
+            <button onclick="handleLogout()" class="w-full py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer transition">
+              <span>ออกจากระบบ</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- LOGIN / REGISTER VIEW -->
+        <div id="auth-login-view" class="space-y-3">
+          <div class="flex border-b border-slate-800">
+            <button id="btn-tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 text-xs font-bold text-white border-b-2 border-indigo-500">เข้าสู่ระบบ</button>
+            <button id="btn-tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 text-xs text-slate-400 hover:text-white font-medium">สมัครสมาชิกใหม่</button>
+          </div>
+
+          <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs"></div>
+
+          <!-- TAB: LOGIN -->
+          <form id="auth-tab-login" onsubmit="handleLogin(event)" class="space-y-2.5">
+            <div>
+              <label class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
+              <input id="login-username" type="text" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">รหัสผ่าน (Password):</label>
+              <input id="login-password" type="password" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer transition">
+              เข้าสู่ระบบเซิร์ฟเวอร์
+            </button>
+
+            <div class="pt-2 border-t border-slate-800 text-center">
+              <span class="text-[10px] text-slate-500">เข้าสู่ระบบด่วนด้วยบัญชี Demo:</span>
+              <div class="flex gap-2 mt-1.5">
+                <button type="button" onclick="quickLoginDemo('teacher')" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] cursor-pointer">
+                  👨‍🏫 ผู้สอน (Demo)
+                </button>
+                <button type="button" onclick="quickLoginDemo('student')" class="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] cursor-pointer">
+                  🧑‍🎓 นักเรียน (Demo)
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- TAB: REGISTER -->
+          <form id="auth-tab-register" onsubmit="handleRegister(event)" class="space-y-2.5 hidden">
+            <div>
+              <label class="block text-slate-400 mb-1">ชื่อที่ต้องการให้แสดง (Display Name):</label>
+              <input id="reg-displayname" type="text" placeholder="เช่น Alice Smith" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">ชื่อผู้ใช้ (Username):</label>
+              <input id="reg-username" type="text" placeholder="ตัวอักษรภาษาอังกฤษหรือตัวเลข" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">รหัสผ่าน (Password):</label>
+              <input id="reg-password" type="password" minlength="6" placeholder="อย่างน้อย 6 ตัวอักษร" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">บทบาท (Role):</label>
+              <select id="reg-role" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                <option value="student" selected>🧑‍🎓 นักเรียน (Student)</option>
+                <option value="teacher">👨‍🏫 ผู้สอน (Teacher)</option>
+              </select>
+            </div>
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition">
+              สมัครสมาชิกใหม่
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: TEACHER CLASSROOM DASHBOARD (PHASE 5B) ================= -->
+  <div id="teacher-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-purple-500/40 rounded-3xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">📊</span>
+          <div>
+            <h2 class="font-bold text-base text-white">แดชบอร์ดสรุปคะแนนห้องเรียน (Teacher Classroom Overview)</h2>
+            <p class="text-xs text-slate-400">ตรวจสอบความคืบหน้าของนักเรียนทุกคน และสถิติการส่งตรวจรายด่าน</p>
+          </div>
+        </div>
+        <button onclick="closeTeacherDashboard()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div id="teacher-dashboard-body" class="p-6 overflow-y-auto flex-1"></div>
+
+      <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-950/60 flex justify-end shrink-0">
+        <button onclick="closeTeacherDashboard()" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: SHARE FLOW VIA SHORT LINK (PHASE 5B) ================= -->
+  <div id="share-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔗</span>
+          <h2 class="font-bold text-base text-white">แชร์ Workflow ผ่านลิงก์</h2>
+        </div>
+        <button onclick="closeShareModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs">
+        <div id="share-status-msg" class="text-slate-300 text-xs">กำลังสร้างลิงก์...</div>
+        <div class="space-y-1">
+          <label class="text-slate-400">ลิงก์สำหรับเปิดดูและทดลองรัน:</label>
+          <div class="flex items-center gap-1.5">
+            <input id="share-url-input" type="text" readonly class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono-code text-cyan-300 focus:outline-none select-all">
+            <button onclick="copyShareUrl()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shrink-0 cursor-pointer">
+              คัดลอก
+            </button>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          เพื่อนหรือผู้เรียนคนอื่นสามารถเปิดลิงก์นี้เพื่อนำ Flow ขึ้นบนกระดาน Studio ได้ทันที
+        </p>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= APPLICATION JAVASCRIPT ================= -->
   <!-- shared -->
   <script src="../shared/variables.js"></script>
@@ -678,5 +850,6 @@
   <script src="js/ui/home.js"></script>
   <script src="js/ui/studio.js"></script>
   <script src="js/ui/tour.js"></script>
+  <script src="js/ui/auth.js"></script>
 </body>
 </html>

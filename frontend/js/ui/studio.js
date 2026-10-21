@@ -73,6 +73,9 @@ async function renderStudioHeaderControls() {
         <button onclick="openImportFlowModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
           <span>📥 นำเข้า JSON</span>
         </button>
+        <button onclick="openShareStudioModal()" title="แชร์ Flow นี้ผ่านลิงก์" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-medium flex items-center gap-1 cursor-pointer transition">
+          <span>🔗 แชร์ลิงก์</span>
+        </button>
         <button onclick="openCreateLevelWizard()" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition">
           <span>🎓 สร้างด่านแบบฝึกหัด</span>
         </button>

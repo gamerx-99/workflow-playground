@@ -12,6 +12,12 @@
       "runtimeExecutable": "backend/.venv/Scripts/python.exe",
       "runtimeArgs": ["-m", "uvicorn", "server:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8787"],
       "port": 8787
+    },
+    {
+      "name": "api-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["backend/api_server.js"],
+      "port": 8788
     }
   ]
 }

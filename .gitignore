@@ -45,5 +45,11 @@ backend/.venv/
 __pycache__/
 *.pyc
 
+# Database files
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
 # Local secrets
 test_thirx.py
