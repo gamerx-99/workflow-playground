@@ -49,12 +49,24 @@ python -m venv backend/.venv
 backend/.venv/Scripts/python.exe -m pip install --no-index --find-links "C:\WORK\Google Antigravity SDK\wheels" google-antigravity
 ```
 
-**ตั้งค่า API key** — สร้างไฟล์ `backend/.env` (ถูก gitignore แล้ว) ใส่บรรทัดเดียว โดยขอ key ที่ https://aistudio.google.com/app/api-keys
+**ล็อกอินด้วยบัญชี Google (Vertex AI Standard Mode — ไม่ใช้ API key)**
+
+1. ติดตั้ง [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) (ต้องมีคำสั่ง `gcloud`)
+2. มี Google Cloud Project ที่เปิดใช้ Vertex AI API และบัญชีของคุณมีสิทธิ์ใช้ (เช่น role `Vertex AI User`) — การเรียกโมเดลคิดค่าใช้จ่ายกับ project นี้
+3. ล็อกอิน (เปิดเบราว์เซอร์ให้ Sign in) แล้วตั้งค่า project
+
+```bash
+gcloud auth application-default login
+```
+
+4. สร้างไฟล์ `backend/.env` (ถูก gitignore แล้ว) — ไม่มีรหัสผ่านหรือคีย์อยู่ในไฟล์นี้
 
 ```
-GEMINI_API_KEY=ใส่คีย์ของคุณ
+GOOGLE_CLOUD_PROJECT=รหัส-project-ของคุณ
+GOOGLE_CLOUD_LOCATION=us-central1
 ```
 
+backend จะอ่านไฟล์ล็อกอินที่ gcloud สร้างไว้ (`%APPDATA%\gcloud\application_default_credentials.json`) ตรวจสถานะได้ที่ `GET http://127.0.0.1:8787/health` (`reason` = `no_login` หรือ `no_project` ถ้ายังไม่พร้อม)
 **เปิด backend**
 
 ```bash
@@ -68,7 +80,7 @@ cd backend
 .venv/Scripts/python.exe -m unittest test_backend -v
 ```
 
-**ความปลอดภัย:** agent ถูกจำกัดให้มี tool เดียวคือ `finish` (ปิดไฟล์/คำสั่ง/เว็บ/subagent) เพราะข้อความใน flow มาจากผู้เรียน, จำกัดงบ token และขนาดอินพุต, และ backend ไม่ส่งรายละเอียด error ภายในออกไป การเรียกโมเดลมีค่าใช้จ่ายตามการใช้งาน
+**ความปลอดภัย:** agent ถูกจำกัดให้มี tool เดียวคือ `finish` (ปิดไฟล์/คำสั่ง/เว็บ/subagent) เพราะข้อความใน flow มาจากผู้เรียน, จำกัดงบ token และขนาดอินพุต, และ backend ไม่ส่งรายละเอียด error ภายในออกไป การเรียกโมเดลมีค่าใช้จ่ายตามการใช้งานกับ Google Cloud project ที่ตั้งไว้ ไม่มี API key หรือรหัสผ่านถูกเก็บในโปรเจกต์ (ไฟล์ล็อกอินอยู่ในโฟลเดอร์ของผู้ใช้ที่ gcloud สร้างให้)
 
 ## ต่อ backend ภายหลัง
 

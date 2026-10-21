@@ -90,7 +90,8 @@
 **5a — AI ด้วย Google Antigravity SDK** (backend Python ใน `backend/`)
 - [x] AI Coach: `POST /coach` ให้คำใบ้จาก flow + ผลตรวจ (ปุ่มในหน้าผลตรวจ, fallback เมื่อไม่มี backend/key)
 - [x] agent จำกัดสิทธิ์: มี tool `finish` อย่างเดียว, จำกัด token, ตรวจขนาดอินพุต
-- [ ] **ยังไม่ได้ทดสอบกับ Gemini จริง** (ต้องใส่ `GEMINI_API_KEY` ใน `backend/.env` ก่อน) — ทดสอบแล้วถึงขั้นที่ SDK เริ่มทำงานและ Gemini ปฏิเสธ key ปลอม
+- [x] ยืนยันตัวตนด้วย Google Login (Vertex AI Standard Mode / ADC) แทน API key — ตั้ง `GOOGLE_CLOUD_PROJECT` ใน `backend/.env` + `gcloud auth application-default login`
+- [ ] **ยังไม่ได้ทดสอบกับ Gemini จริง** (เครื่องนี้ยังไม่มี `gcloud` และยังไม่ได้ล็อกอิน) — ทดสอบแล้วถึงขั้นสถานะ `no_login` / `no_project` และการสร้าง config
 - [ ] AI รีวิว flow ในโหมด Studio (วิจารณ์ดีไซน์ที่กฎตรวจไม่เจอ)
 - [ ] AI ช่วยสร้างด่านจากคำอธิบายภาษาไทย (structured output → flow เฉลย + checks + คำใบ้) — ช่วยเร่ง Phase 3
 - [ ] บล็อก AI ในตัวจำลองเรียก LLM จริง (ตอนนี้เป็นกฎคำสำคัญ)

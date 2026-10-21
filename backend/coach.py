@@ -1,4 +1,6 @@
-"""AI Coach — ให้คำแนะนำผู้เรียนจาก flow ที่วางบนกระดาน โดยใช้ Google Antigravity SDK (Gemini)
+"""AI Coach — ให้คำแนะนำผู้เรียนจาก flow ที่วางบนกระดาน โดยใช้ Google Antigravity SDK (Gemini บน Vertex AI)
+
+ยืนยันตัวตนด้วย Google Login (Application Default Credentials) — ไม่ใช้ API key
 
 ออกแบบให้ปลอดภัยเพราะข้อความใน flow มาจากผู้เรียน (ไม่น่าเชื่อถือ):
 - agent ไม่มี tool ใดๆ นอกจาก finish (ไม่อ่าน/เขียนไฟล์ ไม่รันคำสั่ง ไม่ค้นเว็บ ไม่เรียก subagent)
@@ -61,8 +63,43 @@ class CoachReply(pydantic.BaseModel):
   )
 
 
-def has_api_key() -> bool:
-  return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+DEFAULT_LOCATION = "us-central1"
+
+
+def adc_file() -> Path:
+  """ตำแหน่งไฟล์ Application Default Credentials ที่ `gcloud auth application-default login` สร้างให้"""
+  explicit = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+  if explicit:
+    return Path(explicit)
+  if os.name == "nt":
+    base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    return base / "gcloud" / "application_default_credentials.json"
+  return Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+
+
+def vertex_settings() -> tuple[str | None, str]:
+  """(project, location) จาก environment / backend/.env"""
+  return (
+      os.environ.get("GOOGLE_CLOUD_PROJECT") or None,
+      os.environ.get("GOOGLE_CLOUD_LOCATION") or DEFAULT_LOCATION,
+  )
+
+
+def auth_problem() -> str | None:
+  """คืนเหตุผลที่ยังใช้ AI ไม่ได้ หรือ None ถ้าพร้อม: 'no_login' | 'no_project'
+
+  ตรวจแค่ว่ามีไฟล์ล็อกอินและตั้งค่า project แล้วหรือยัง (ไม่ยิงเครือข่าย)
+  ผู้ใช้ล็อกอินด้วยบัญชี Google ผ่าน gcloud — ไม่มี API key ในระบบนี้
+  """
+  if not adc_file().is_file():
+    return "no_login"
+  if not vertex_settings()[0]:
+    return "no_project"
+  return None
+
+
+def has_credentials() -> bool:
+  return auth_problem() is None
 
 
 def load_dotenv(path: Path | None = None) -> None:
@@ -147,7 +184,12 @@ RULES = types.SystemInstructionSection(
 
 
 def make_config() -> LocalAgentConfig:
+  project, location = vertex_settings()
   return LocalAgentConfig(
+      # Vertex AI Standard Mode: ใช้ Google Login (ADC) ไม่ต้องมี API key
+      vertex=True,
+      project=project,
+      location=location,
       system_instructions=types.TemplatedSystemInstructions(
           identity=IDENTITY, sections=[RULES]
       ),
@@ -168,8 +210,9 @@ class CoachUnavailable(Exception):
 
 
 async def ask_coach(req: CoachRequest) -> CoachReply:
-  if not has_api_key():
-    raise CoachUnavailable("no_api_key")
+  problem = auth_problem()
+  if problem:
+    raise CoachUnavailable(problem)
   async with Agent(make_config()) as agent:
     response = await agent.chat(build_prompt(req))
     data = await response.structured_output()

@@ -92,7 +92,8 @@ function showCheckResult(result) {
 
 const COACH_FALLBACK_TEXT = {
   offline: 'ยังไม่ได้เปิด backend ของ AI Coach — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ (วิธีเปิดอยู่ใน README หัวข้อ AI Coach)',
-  no_api_key: 'เปิด backend แล้ว แต่ยังไม่ได้ตั้ง GEMINI_API_KEY ใน backend/.env — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
+  no_login: 'เปิด backend แล้ว แต่ยังไม่ได้ล็อกอิน Google — รัน "gcloud auth application-default login" ใน Terminal แล้วลองใหม่ (ดูวิธีใน README หัวข้อ AI Coach) หรือใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
+  no_project: 'ล็อกอิน Google แล้ว แต่ยังไม่ได้ตั้ง GOOGLE_CLOUD_PROJECT ใน backend/.env — ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ',
   busy: 'โค้ชกำลังช่วยคนอื่นอยู่ ลองใหม่อีกครั้งในอีกสักครู่นะครับ',
   timeout: 'โค้ชใช้เวลานานเกินไป ลองใหม่อีกครั้งนะครับ',
   failed: 'โค้ชตอบไม่ได้ในตอนนี้ ใช้ปุ่ม "💡 ดูคำใบ้" ไปก่อนได้ครับ'

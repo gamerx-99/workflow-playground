@@ -3,6 +3,7 @@
 """
 
 import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -49,6 +50,20 @@ class PromptTests(unittest.TestCase):
     self.assertIn("กระดานว่าง", coach.describe_flow(coach.Flow()))
 
 
+class VertexConfigTests(unittest.TestCase):
+  def test_uses_vertex_standard_mode_without_api_key(self):
+    env = {"GOOGLE_CLOUD_PROJECT": "my-proj", "GOOGLE_CLOUD_LOCATION": "asia-southeast1", "GEMINI_API_KEY": "ignored"}
+    with mock.patch.dict(os.environ, env, clear=True):
+      cfg = coach.make_config()
+    self.assertTrue(cfg.vertex)
+    self.assertEqual((cfg.project, cfg.location), ("my-proj", "asia-southeast1"))
+    self.assertIsNone(cfg.api_key)
+
+  def test_default_location(self):
+    with mock.patch.dict(os.environ, {"GOOGLE_CLOUD_PROJECT": "p"}, clear=True):
+      self.assertEqual(coach.vertex_settings(), ("p", "us-central1"))
+
+
 class AgentSafetyTests(unittest.TestCase):
   def test_agent_has_only_finish_tool_and_no_subagents(self):
     cfg = coach.make_config()
@@ -61,17 +76,35 @@ class EndpointTests(unittest.TestCase):
   def setUp(self):
     self.client = TestClient(server.app)
 
-  def test_health_reports_ai_flag(self):
-    with mock.patch.dict(os.environ, {}, clear=True):
-      self.assertFalse(self.client.get("/health").json()["ai"])
-    with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "x"}):
-      self.assertTrue(self.client.get("/health").json()["ai"])
+  def _auth(self, logged_in: bool, project: str | None):
+    """จำลองสถานะล็อกอิน Google (ไฟล์ ADC) และ project"""
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.close()
+    self.addCleanup(os.unlink, tmp.name)
+    env = {"GOOGLE_APPLICATION_CREDENTIALS": tmp.name if logged_in else tmp.name + ".missing"}
+    if project:
+      env["GOOGLE_CLOUD_PROJECT"] = project
+    return mock.patch.dict(os.environ, env, clear=True)
 
-  def test_no_key_returns_503(self):
-    with mock.patch.dict(os.environ, {}, clear=True):
+  def test_health_reports_auth_state(self):
+    with self._auth(False, "p"):
+      self.assertEqual(self.client.get("/health").json(), {"ok": True, "ai": False, "reason": "no_login"})
+    with self._auth(True, None):
+      self.assertEqual(self.client.get("/health").json()["reason"], "no_project")
+    with self._auth(True, "my-proj"):
+      self.assertEqual(self.client.get("/health").json(), {"ok": True, "ai": True, "reason": None})
+
+  def test_not_logged_in_returns_503(self):
+    with self._auth(False, "p"):
       r = self.client.post("/coach", json=VALID)
     self.assertEqual(r.status_code, 503)
-    self.assertEqual(r.json()["error"], "no_api_key")
+    self.assertEqual(r.json()["error"], "no_login")
+
+  def test_missing_project_returns_503(self):
+    with self._auth(True, None):
+      r = self.client.post("/coach", json=VALID)
+    self.assertEqual(r.status_code, 503)
+    self.assertEqual(r.json()["error"], "no_project")
 
   def test_invalid_request_returns_422(self):
     r = self.client.post("/coach", json={"level_id": "abc"})
