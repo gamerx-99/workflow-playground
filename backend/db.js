@@ -5,7 +5,10 @@ const { DatabaseSync } = require('node:sqlite');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'workflow_lab.db');
+// DB_PATH แบบ relative (เช่น backend/workflow_lab.db ใน .env) อิงจากรากโปรเจกต์ ไม่ใช่โฟลเดอร์ที่สั่งรัน
+const DB_PATH = process.env.DB_PATH
+  ? path.resolve(path.join(__dirname, '..'), process.env.DB_PATH)
+  : path.join(__dirname, 'workflow_lab.db');
 
 function initDb(dbPath = DB_PATH) {
   const db = new DatabaseSync(dbPath);

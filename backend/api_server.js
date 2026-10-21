@@ -4,6 +4,22 @@
 // ---------------------------------------------------------
 const http = require('node:http');
 const crypto = require('node:crypto');
+const path = require('node:path');
+
+// โหลดค่าตั้งค่าจากไฟล์ .env (backend/.env แล้วตามด้วย .env ที่รากโปรเจกต์) เมื่อรันเป็นเซิร์ฟเวอร์เท่านั้น
+// - ต้องทำก่อน require('./db.js') เพราะ db.js อ่าน DB_PATH ตอนโหลดไฟล์
+// - ตัวแปรที่ตั้งไว้ใน environment ของเครื่องอยู่แล้วจะไม่ถูกทับ (process.loadEnvFile ไม่ทับค่าเดิม)
+// - ไม่โหลดตอนถูก require จากเทสต์ เพื่อให้เทสต์ไม่ขึ้นกับ .env จริงของเครื่อง
+if (require.main === module) {
+  for (const file of [path.join(__dirname, '.env'), path.join(__dirname, '..', '.env')]) {
+    try {
+      process.loadEnvFile(file);
+    } catch (e) {
+      if (e.code !== 'ENOENT') console.warn(`⚠️  อ่านไฟล์ ${file} ไม่ได้: ${e.message}`);
+    }
+  }
+}
+
 const { initDb, hashPassword } = require('./db.js');
 
 // โหลดตรรกะและข้อมูลจาก shared/
