@@ -47,10 +47,13 @@ const LocalApi = {
   },
 
   // POST /levels/:id/check — ตรวจคำตอบ และบันทึกว่าผ่านด่านแล้วถ้าผ่าน
-  async checkLevel(levelId, flow) {
+  // ด่านทายผล (predict) ส่ง answers แทน flow
+  async checkLevel(levelId, flow, answers) {
     const level = LEVELS.find(l => l.id === levelId);
     if (!level) throw new Error(`ไม่พบด่าน ${levelId}`);
-    const result = checkFlow(level, flow, BLOCK_CATALOG);
+    const result = level.mode === 'predict'
+      ? checkPrediction(level, answers, BLOCK_CATALOG)
+      : checkFlow(level, flow, BLOCK_CATALOG);
     if (result.passed) {
       const progress = readStore(PROGRESS_KEY, { passed: [] });
       if (!progress.passed.includes(levelId)) {

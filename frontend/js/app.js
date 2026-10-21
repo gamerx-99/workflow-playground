@@ -24,6 +24,15 @@ let activeWire = null;
 let showCursorRing = true;
 
 let passedLevelIds = [];
+let lastRun = null; // ผลจำลองการทำงานล่าสุด (ล้างทิ้งทุกครั้งที่แก้ flow)
+
+const MODE_LABELS = {
+  build: '🛠 ต่อเอง',
+  fill: '✏️ เติมช่องว่าง',
+  debug: '🐞 หาจุดผิด',
+  predict: '🔮 ทายผลลัพธ์',
+  sandbox: '🧪 อิสระ'
+};
 
 // ---------------------------------------------------------
 // 4. INITIALIZATION
@@ -57,6 +66,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 function saveCurrentLevelToStorage() {
+  lastRun = null;
   Api.saveFlow(currentLevelId, { nodes, connections, nextNodeId });
 }
 
@@ -75,10 +85,15 @@ async function loadLevelState(levelId) {
 
   renderLevelTabs();
 
+  lastRun = null;
+  document.getElementById('level-mode').textContent = MODE_LABELS[levelObj.mode || 'build'];
+  document.getElementById('template-btn').textContent = levelObj.start ? '↺ เริ่มโจทย์ใหม่' : '✨ วางโครงตัวอย่าง';
+
   const saved = await Api.loadFlow(levelId);
-  nodes = saved ? saved.nodes : [];
-  connections = saved ? saved.connections : [];
-  nextNodeId = saved ? saved.nextNodeId : 1;
+  const initial = levelObj.start ? JSON.parse(JSON.stringify(levelObj.start)) : { nodes: [], connections: [] };
+  nodes = saved ? saved.nodes : initial.nodes;
+  connections = saved ? saved.connections : initial.connections;
+  nextNodeId = saved ? saved.nextNodeId : Math.max(0, ...nodes.map(n => n.id)) + 1;
 
   renderCanvas();
   renderInspector();

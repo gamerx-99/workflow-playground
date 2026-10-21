@@ -60,19 +60,23 @@
       <span id="level-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
         ด่านที่ 1
       </span>
+      <span id="level-mode" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0"></span>
       <div class="truncate">
         <span id="mission-title" class="font-semibold text-xs text-white mr-2">กำลังโหลดโจทย์...</span>
         <span id="mission-desc" class="text-xs text-slate-400">...</span>
       </div>
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
+      <button onclick="openRunModal()" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow shadow-sky-600/30 transition cursor-pointer">
+        ▶ จำลองการทำงาน
+      </button>
       <button onclick="submitLevelCheck()" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow shadow-emerald-600/30 transition cursor-pointer">
         ✅ ส่งตรวจด่านนี้
       </button>
       <button onclick="toggleHint()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer">
         💡 คำใบ้ + ตัวแปรที่ต้องใช้
       </button>
-      <button onclick="loadTemplateForCurrentLevel()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition cursor-pointer">
+      <button id="template-btn" onclick="loadTemplateForCurrentLevel()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition cursor-pointer">
         ✨ วางโครงตัวอย่าง
       </button>
       <button onclick="clearCanvasConfirm()" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs transition cursor-pointer">
@@ -267,6 +271,51 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: RUN SIMULATION ================= -->
+  <div id="run-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">▶</span>
+          <div>
+            <h2 class="font-bold text-base text-white">จำลองการทำงานของ Flow</h2>
+            <p class="text-xs text-slate-400">ลองป้อนข้อมูลตัวอย่างเข้า Trigger แล้วดูว่าตัวแปรไหลผ่านแต่ละบล็อกอย่างไร (ไม่ได้ส่งข้อความจริง)</p>
+          </div>
+        </div>
+        <button onclick="closeRunModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+      <div class="px-5 pt-4 space-y-2 border-b border-slate-800 pb-3">
+        <div id="run-scenarios" class="space-y-2"></div>
+        <button onclick="runSimulation()" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold cursor-pointer">▶ รันอีกครั้งด้วยข้อมูลชุดที่เลือก</button>
+      </div>
+      <div id="run-result" class="p-5 overflow-y-auto space-y-2 text-xs"></div>
+      <div class="px-6 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
+        <button onclick="clearRunResult()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer">ล้างผลบนกระดาน</button>
+        <button onclick="closeRunModal()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold cursor-pointer">ปิด (ผลยังไฮไลต์บนกระดาน)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: PREDICT ================= -->
+  <div id="predict-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">🔮</span>
+          <div>
+            <h2 class="font-bold text-base text-white">ทายผลลัพธ์ของ Flow</h2>
+            <p class="text-xs text-slate-400">เลือกคำตอบแต่ละข้อ แล้วกดส่งคำตอบ (ปิดหน้าต่างนี้เพื่อกลับไปดู Flow ได้)</p>
+          </div>
+        </div>
+        <button onclick="closePredictModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+      <div id="predict-body" class="p-5 overflow-y-auto space-y-3"></div>
+      <div class="px-6 py-3 border-t border-slate-800 bg-slate-950/60 flex justify-end">
+        <button onclick="submitPredictAnswers()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer">ส่งคำตอบ</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL 2.5: LEVEL CHECK RESULT ================= -->
   <div id="level-check-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
@@ -321,6 +370,7 @@
   <script src="../shared/variables.js"></script>
   <script src="../shared/blocks.js"></script>
   <script src="../shared/levels.js"></script>
+  <script src="../shared/simulator.js"></script>
   <script src="../shared/checker.js"></script>
   <!-- frontend -->
   <script src="js/api/storage.js"></script>
@@ -332,5 +382,6 @@
   <script src="js/engine/interaction.js"></script>
   <script src="js/ui/inspector.js"></script>
   <script src="js/ui/modals.js"></script>
+  <script src="js/ui/run.js"></script>
 </body>
 </html>

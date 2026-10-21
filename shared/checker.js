@@ -193,4 +193,37 @@ const CHECK_RUNNERS = {
   }
 };
 
-if (typeof module !== 'undefined') module.exports = { checkFlow, CHECK_RUNNERS };
+// ---------------------------------------------------------
+// ด่านทายผล (mode: 'predict')
+// คำตอบที่ถูกคำนวณจาก simulateFlow(level.start) แล้วเทียบกับ outcome ของแต่ละตัวเลือก
+// answers = [indexของตัวเลือกที่เลือกในแต่ละข้อ]
+// ---------------------------------------------------------
+function sameOutcome(a, b) {
+  return JSON.stringify(a.sheets) === JSON.stringify(b.sheets) &&
+    JSON.stringify(a.messages) === JSON.stringify(b.messages);
+}
+
+function correctOptionIndex(level, question, catalog) {
+  const simulate = typeof simulateFlow !== 'undefined' ? simulateFlow : require('./simulator.js').simulateFlow;
+  const sim = simulate(level.start, catalog, { overrides: question.overrides, scenarios: question.scenarios });
+  return question.options.findIndex(o => sameOutcome(o.outcome, sim.outcome));
+}
+
+function checkPrediction(level, answers, catalog) {
+  const items = level.questions.map((q, i) => {
+    const correct = correctOptionIndex(level, q, catalog);
+    const picked = answers ? answers[i] : undefined;
+    const ok = picked !== undefined && picked === correct;
+    return {
+      ok,
+      label: `ข้อ ${i + 1}: ${q.text}`,
+      detail: picked === undefined
+        ? 'ยังไม่ได้เลือกคำตอบ'
+        : ok ? q.explain : 'ยังไม่ถูก ลองไล่ตามสายใน Flow อีกครั้ง หรือกด ▶ จำลองการทำงานเพื่อดูว่าข้อมูลไหลไปทางไหน'
+    };
+  });
+  const score = items.filter(i => i.ok).length;
+  return { passed: items.length > 0 && score === items.length, score, total: items.length, items };
+}
+
+if (typeof module !== 'undefined') module.exports = { checkFlow, checkPrediction, correctOptionIndex, CHECK_RUNNERS };

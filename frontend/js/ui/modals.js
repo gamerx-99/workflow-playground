@@ -41,7 +41,15 @@ function closeVarCheckModal() {
 }
 
 async function submitLevelCheck() {
-  const result = await Api.checkLevel(currentLevelId, { nodes, connections });
+  const level = LEVELS.find(l => l.id === currentLevelId);
+  if (level.mode === 'predict') {
+    openPredictModal(level);
+    return;
+  }
+  showCheckResult(await Api.checkLevel(currentLevelId, { nodes, connections }));
+}
+
+function showCheckResult(result) {
   if (result.passed && !passedLevelIds.includes(currentLevelId)) {
     passedLevelIds.push(currentLevelId);
     renderLevelTabs();
@@ -88,10 +96,11 @@ function toggleHint() {
 
 function loadTemplateForCurrentLevel() {
   const levelObj = LEVELS.find(l => l.id === currentLevelId);
-  if (!levelObj || !levelObj.template) return;
+  const source = levelObj && (levelObj.start || levelObj.template);
+  if (!source) return;
 
-  nodes = JSON.parse(JSON.stringify(levelObj.template.nodes));
-  connections = JSON.parse(JSON.stringify(levelObj.template.connections));
+  nodes = JSON.parse(JSON.stringify(source.nodes));
+  connections = JSON.parse(JSON.stringify(source.connections));
   nextNodeId = Math.max(...nodes.map(n => n.id), 0) + 1;
   selectedNodeId = nodes[0] ? nodes[0].id : null;
 

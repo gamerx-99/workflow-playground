@@ -38,7 +38,9 @@ function renderCanvas() {
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-base shrink-0">${def.icon}</span>
             <div class="min-w-0">
-              <div class="text-[10px] font-bold uppercase tracking-wider opacity-75">#${node.id} • ${def.badge}</div>
+              <div class="text-[10px] font-bold uppercase tracking-wider opacity-75">#${node.id} • ${def.badge}${
+                lastRun && lastRun.visited[node.id] ? ` <span class="ml-1 px-1.5 rounded bg-emerald-500/30 text-emerald-200">▶ ลำดับ ${lastRun.visited[node.id]}</span>` : ''
+              }</div>
               <div class="text-xs font-bold text-white truncate">${def.title}</div>
             </div>
           </div>
@@ -208,7 +210,7 @@ function renderConnections() {
 
     return `
       <g onclick="deleteConnection(${index}, event)">
-        <path d="${d}" class="connection-path" stroke="${strokeColor}" marker-end="${marker}">
+        <path d="${d}" class="connection-path${lastRun && lastRun.usedConnections.includes(index) ? ' connection-active' : ''}" stroke="${strokeColor}" marker-end="${marker}">
           <title>คลิกที่เส้นเพื่อลบสายเชื่อมนี้</title>
         </path>
       </g>
