@@ -42,7 +42,22 @@ function sanitizeFlow(flow, catalog, name) {
     ids.add(id);
     const config = {};
     Object.entries(n.config && typeof n.config === 'object' ? n.config : {}).forEach(([k, v]) => {
-      if (typeof v === 'string' || typeof v === 'number') config[String(k).slice(0, 40)] = String(v).slice(0, SANITIZE_LIMITS.text);
+      if (k === 'routes' && Array.isArray(v)) {
+        config.routes = v.slice(0, 15).map(r => ({
+          id: escapeText(r.id, 20),
+          label: escapeText(r.label, 40),
+          condition: escapeText(r.condition, 200),
+          operator: escapeText(r.operator || '==', 20)
+        }));
+      } else if (k === 'conditions' && Array.isArray(v)) {
+        config.conditions = v.slice(0, 10).map(c => ({
+          leftValue: escapeText(c.leftValue, 200),
+          operator: escapeText(c.operator || '==', 20),
+          rightValue: escapeText(c.rightValue, 200)
+        }));
+      } else if (typeof v === 'string' || typeof v === 'number') {
+        config[String(k).slice(0, 40)] = String(v).slice(0, SANITIZE_LIMITS.text);
+      }
     });
     const clamp = v => Math.max(0, Math.min(SANITIZE_LIMITS.coord, Number.isFinite(Number(v)) ? Math.round(Number(v)) : 0));
     return { id, type: def.type, x: clamp(n.x), y: clamp(n.y), config };
@@ -56,7 +71,10 @@ function sanitizeFlow(flow, catalog, name) {
     if (!from || !to) throw new Error(`${name}: เส้นเชื่อมอ้างบล็อกที่ไม่มี`);
     const fromDef = catalog.find(b => b.type === from.type);
     const toDef = catalog.find(b => b.type === to.type);
-    if (!fromDef.outputs.some(o => o.id === c.fromPort)) throw new Error(`${name}: บล็อก #${from.id} ไม่มีพอร์ต "${escapeText(c.fromPort, 20)}"`);
+    const validOutputs = from.type === 'logic_switch'
+      ? ['default', ...fromDef.outputs.map(o => o.id), 'route_a', 'route_b', 'route_c', 'route_d', 'route_e', 'route_f', 'route_g', 'route_h', ...(Array.isArray(from.config && from.config.routes) ? from.config.routes.map(r => r.id) : [])]
+      : fromDef.outputs.map(o => o.id);
+    if (!validOutputs.includes(c.fromPort)) throw new Error(`${name}: บล็อก #${from.id} ไม่มีพอร์ต "${escapeText(c.fromPort, 20)}"`);
     if (!toDef.inputs.some(i => i.id === c.toPort)) throw new Error(`${name}: บล็อก #${to.id} ไม่มีพอร์ตรับ "${escapeText(c.toPort, 20)}"`);
     return { fromNode: from.id, fromPort: c.fromPort, toNode: to.id, toPort: c.toPort };
   });

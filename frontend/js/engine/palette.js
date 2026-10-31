@@ -21,27 +21,45 @@ function renderPalette() {
     emerald: 'border-emerald-500/30 hover:border-emerald-400 bg-emerald-500/5 text-emerald-300'
   };
 
+  const currentDiff = (typeof LEVELS !== 'undefined' && typeof currentLevelId !== 'undefined')
+    ? (LEVELS.find(l => String(l.id) === String(currentLevelId))?.difficulty || 1)
+    : 3; // studio mode / custom = difficulty 3 (clean)
+
   container.innerHTML = categories.map(cat => {
     const items = filtered.filter(b => b.category === cat);
     return `
       <div>
         <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 px-1">${cat}</div>
         <div class="space-y-1.5">
-          ${items.map(item => `
-            <div draggable="true"
-                 ondragstart="onPaletteDragStart(event, '${item.type}')"
-                 onclick="addNodeToCanvas('${item.type}')"
-                 class="p-2 rounded-xl border ${colorMap[item.color]} cursor-pointer transition flex items-center gap-2.5 group">
-              <div class="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center text-base shrink-0 group-hover:scale-110 transition">
-                ${item.icon}
+          ${items.map(item => {
+            const displayTitle = item.cleanTitle || item.title.split(' (')[0];
+            let tipText = '';
+            if (currentDiff === 1) {
+              const adviceShort = item.varAdvice ? item.varAdvice.replace(/[*`#]/g, '').slice(0, 110) : '';
+              tipText = `${displayTitle} (${item.badge})\n${adviceShort}`;
+            } else if (currentDiff === 2) {
+              tipText = `${displayTitle} • ${item.badge}`;
+            } else {
+              tipText = '';
+            }
+
+            return `
+              <div draggable="true"
+                   ondragstart="onPaletteDragStart(event, '${item.type}')"
+                   onclick="addNodeToCanvas('${item.type}')"
+                   class="${tipText ? 'tip ' : ''}p-2 rounded-xl border ${colorMap[item.color]} cursor-pointer transition flex items-center gap-2.5 group"
+                   ${tipText ? `data-tip="${escapeHtml(tipText)}" data-tip-pos="top" data-tip-edge="left"` : ''}>
+                <div class="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center text-base shrink-0 group-hover:scale-110 transition">
+                  ${item.icon}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="text-xs font-semibold text-slate-100 truncate">${displayTitle}</div>
+                  <div class="text-[10px] text-slate-400 truncate">${item.badge}</div>
+                </div>
+                <span class="text-xs opacity-60 group-hover:opacity-100 font-bold">+</span>
               </div>
-              <div class="min-w-0 flex-1">
-                <div class="text-xs font-semibold text-slate-100 truncate">${item.title}</div>
-                <div class="text-[10px] text-slate-400 truncate">${item.badge}</div>
-              </div>
-              <span class="text-xs opacity-60 group-hover:opacity-100 font-bold">+</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;

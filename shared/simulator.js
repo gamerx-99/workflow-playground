@@ -53,12 +53,22 @@ function simCompare(left, op, right) {
   const ln = simToNumber(left);
   const rn = simToNumber(right);
   const numeric = ln !== null && rn !== null;
+  const lStr = String(left == null ? '' : left).trim();
+  const rStr = String(right == null ? '' : right).trim();
+
   switch (op) {
     case '>=': return numeric && ln >= rn;
     case '>': return numeric && ln > rn;
+    case '<=': return numeric && ln <= rn;
     case '<': return numeric && ln < rn;
-    case '==': return numeric ? ln === rn : String(left).trim() === String(right).trim();
-    case 'contains': return String(left).includes(String(right));
+    case '==': return numeric ? ln === rn : lStr === rStr;
+    case '!=': return numeric ? ln !== rn : lStr !== rStr;
+    case 'contains': return lStr.toLowerCase().includes(rStr.toLowerCase());
+    case 'not_contains': return !lStr.toLowerCase().includes(rStr.toLowerCase());
+    case 'starts_with': return lStr.toLowerCase().startsWith(rStr.toLowerCase());
+    case 'ends_with': return lStr.toLowerCase().endsWith(rStr.toLowerCase());
+    case 'is_empty': return lStr === '';
+    case 'is_not_empty': return lStr !== '';
     default: return false;
   }
 }
@@ -100,30 +110,69 @@ function simRunNode(node, def, inVars, state, opts) {
     }
 
     case 'logic_if': {
-      const left = render(cfg.leftValue);
-      const right = render(cfg.rightValue);
-      if (/\{\{/.test(left)) result.warnings.push('ช่อง "ค่าที่ต้องการตรวจ" ยังไม่มีค่า จึงถือว่าเงื่อนไขเป็นเท็จ');
-      const yes = !/\{\{/.test(left) && simCompare(left, cfg.operator, right);
-      result.output = `${left || '(ว่าง)'} ${cfg.operator} ${right || '(ว่าง)'}  ➔  ${yes ? 'จริง (True)' : 'เท็จ (False)'}`;
+      const condList = Array.isArray(cfg.conditions) && cfg.conditions.length > 0
+        ? cfg.conditions
+        : [{ leftValue: cfg.leftValue, operator: cfg.operator || '==', rightValue: cfg.rightValue }];
+
+      const results = [];
+      const summaries = [];
+
+      condList.forEach(c => {
+        const left = render(c.leftValue);
+        const right = render(c.rightValue);
+        if (/\{\{/.test(left)) result.warnings.push(`ช่อง "${c.leftValue || 'ค่าที่ต้องการตรวจ'}" ยังไม่มีค่า จึงถือว่าเงื่อนไขเป็นเท็จ`);
+        const subYes = !/\{\{/.test(left) && simCompare(left, c.operator || '==', right);
+        results.push(subYes);
+        summaries.push(`${left || '(ว่าง)'} ${c.operator || '=='} ${right || '(ว่าง)'}`);
+      });
+
+      const logic = (cfg.conditionLogic || 'AND').toUpperCase();
+      const yes = logic === 'OR' ? results.some(Boolean) : results.every(Boolean);
+
+      result.output = condList.length > 1
+        ? `ตรวจ (${summaries.join(` ${logic} `)}) ➔ ${yes ? 'จริง (True)' : 'เท็จ (False)'}`
+        : `${summaries[0] || ''} ➔ ${yes ? 'จริง (True)' : 'เท็จ (False)'}`;
       result.forks = [{ port: yes ? 'true' : 'false', vars }];
       break;
     }
 
     case 'logic_switch': {
       const value = render(cfg.switchField).trim();
-      const routes = [['route_a', cfg.caseA], ['route_b', cfg.caseB], ['route_c', cfg.caseC]];
-      const hit = routes.find(([, c]) => c && value === String(c).trim());
-      result.output = `ค่า "${value || '(ว่าง)'}"  ➔  ${hit ? `สาย ${hit[0].slice(-1).toUpperCase()}` : 'ไม่ตรงกับสายไหนเลย'}`;
-      if (!hit) result.warnings.push('ค่าที่ได้ไม่ตรงกับเงื่อนไขของสาย A/B/C จึงไม่มีสายไหนทำงานต่อ');
-      result.forks = hit ? [{ port: hit[0], vars }] : [];
+      let routes = [];
+      if (Array.isArray(cfg.routes) && cfg.routes.length > 0) {
+        routes = cfg.routes.map((r, i) => [
+          r.id || `route_${String.fromCharCode(97 + i)}`,
+          r.condition || '',
+          r.label || `สาย ${String.fromCharCode(65 + i)}`,
+          r.operator || '=='
+        ]);
+      } else {
+        routes = [
+          ['route_a', cfg.caseA, 'สาย A', '=='],
+          ['route_b', cfg.caseB, 'สาย B', '=='],
+          ['route_c', cfg.caseC, 'สาย C', '==']
+        ];
+      }
+      const hit = routes.find(([, c, , op]) => {
+        if (!c && op !== 'is_empty') return false;
+        return simCompare(value, op || '==', c);
+      });
+      if (hit) {
+        result.output = `ค่า "${value || '(ว่าง)'}"  ➔  ${hit[2] || hit[0]}`;
+        result.forks = [{ port: hit[0], vars }];
+      } else {
+        result.output = `ค่า "${value || '(ว่าง)'}"  ➔  ไม่ตรงเงื่อนไขสายใด (ส่งไปสาย Default)`;
+        result.forks = [{ port: 'default', vars }];
+      }
       break;
     }
 
     case 'logic_loop': {
       const list = render(cfg.sourceList);
       if (/\{\{/.test(list)) result.warnings.push('ช่อง "รายการที่จะวนลูป" ยังไม่มีค่า');
-      const items = /\{\{/.test(list) ? [] : list.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 20);
-      result.output = `วนลูป ${items.length} รายการ`;
+      const maxIter = parseInt(cfg.maxIterations, 10) || 20;
+      const items = /\{\{/.test(list) ? [] : list.split('\n').map(s => s.trim()).filter(Boolean).slice(0, Math.min(maxIter, 50));
+      result.output = `วนลูป ${items.length} รายการ (โหมด: ${cfg.loopMode || 'item_by_item'})`;
       result.forks = [
         ...items.map(item => ({ port: 'each', vars: { ...vars, loop_item: item } })),
         { port: 'done', vars }
@@ -132,10 +181,13 @@ function simRunNode(node, def, inVars, state, opts) {
       break;
     }
 
-    case 'logic_delay':
-      result.output = `รอ ${cfg.duration || '-'} (${cfg.reason || '-'})`;
+    case 'logic_delay': {
+      const unit = cfg.timeUnit || 'minutes';
+      const dur = cfg.duration || '15 นาที';
+      result.output = `รอ ${dur} [${unit}] (${cfg.reason || '-'})`;
       result.forks = single({});
       break;
+    }
 
     case 'ai_agent': {
       const prompt = render(cfg.prompt);
@@ -154,25 +206,41 @@ function simRunNode(node, def, inVars, state, opts) {
           : 'ขอบคุณที่ติดต่อมาค่ะ ทีมงานจะตอบกลับโดยเร็ว';
       }
       result.produced = { ai_result: aiResult, ai_reply: aiReply };
-      result.output = `AI ตอบ: ${aiResult}`;
+      const modelTag = cfg.model ? `[${cfg.model}] ` : '';
+      result.output = `AI ${modelTag}ตอบ: ${aiResult}`;
       result.forks = single(result.produced);
       break;
     }
 
     case 'data_formatter': {
-      const text = render(cfg.template);
+      let text = render(cfg.template);
+      if (cfg.formatMode === 'json_transform') {
+        text = JSON.stringify({ data: text, formattedAt: new Date().toISOString() });
+      } else if (cfg.formatMode === 'date_format') {
+        const pattern = cfg.dateFormatPattern || 'th_long';
+        text = pattern === 'th_long'
+          ? '31 ตุลาคม 2569'
+          : (pattern === 'th_short' ? '31 ต.ค. 69' : '2026-10-31');
+      } else if (cfg.formatMode === 'number_format') {
+        const num = parseFloat(text.replace(/[^0-9.-]/g, '')) || 0;
+        text = `${num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
+      }
       result.produced = { formatted_text: text };
       result.output = text;
       result.forks = single(result.produced);
       break;
     }
 
-    case 'action_http':
-      result.produced = { api_data: '{"status":"ok","items":3}' };
-      result.output = `${cfg.method || 'GET'} ${cfg.endpoint || ''}  ➔  ได้ข้อมูลกลับมา`;
+    case 'action_http': {
+      const method = (cfg.method || 'GET').toUpperCase();
+      const endpoint = render(cfg.endpoint || '');
+      render(cfg.headers);
       render(cfg.bodyPayload);
+      result.produced = { api_data: '{"status":"ok","items":3}', api_status: '200' };
+      result.output = `${method} ${endpoint}  ➔  [200 OK] ได้ข้อมูลกลับมา`;
       result.forks = single(result.produced);
       break;
+    }
 
     case 'action_sheets': {
       const sheet = render(cfg.sheetName) || '(ไม่มีชื่อชีต)';
@@ -181,6 +249,16 @@ function simRunNode(node, def, inVars, state, opts) {
         result.produced = { sheet_rows: SAMPLE_SHEET_ROWS.join('\n'), row_number: String(SAMPLE_SHEET_ROWS.length) };
         result.output = `ดึงข้อมูลจากชีต "${sheet}" ได้ ${SAMPLE_SHEET_ROWS.length} แถว (เงื่อนไข: ${columns})`;
         result.effects.push({ kind: 'sheet', op: 'read_rows', sheet, detail: columns });
+      } else if (cfg.operation === 'update_row') {
+        result.produced = { row_number: '1' };
+        result.output = `อัปเดตแถวในชีต "${sheet}": ${columns}`;
+        result.effects.push({ kind: 'sheet', op: 'update_row', sheet, detail: columns });
+      } else if (cfg.operation === 'delete_row') {
+        result.output = `ลบแถวในชีต "${sheet}": ${columns}`;
+        result.effects.push({ kind: 'sheet', op: 'delete_row', sheet, detail: columns });
+      } else if (cfg.operation === 'clear_sheet') {
+        result.output = `ล้างข้อมูลในชีต "${sheet}" ทั้งหมด`;
+        result.effects.push({ kind: 'sheet', op: 'clear', sheet, detail: 'all' });
       } else {
         state.sheetRows[sheet] = (state.sheetRows[sheet] || 0) + 1;
         result.produced = { row_number: String(state.sheetRows[sheet]) };
@@ -193,8 +271,12 @@ function simRunNode(node, def, inVars, state, opts) {
 
     case 'action_line': {
       const text = render(cfg.messageTemplate);
-      result.output = `ส่ง LINE ถึง ${TARGET_LABELS[cfg.target] || cfg.target}`;
-      result.effects.push({ kind: 'message', channel: 'LINE', target: cfg.target, targetLabel: TARGET_LABELS[cfg.target] || cfg.target, text });
+      const ch = cfg.channel || 'LINE';
+      const targetLabel = cfg.target === 'custom'
+        ? (render(cfg.customTarget) || 'กำหนดเอง')
+        : (TARGET_LABELS[cfg.target] || cfg.target || 'แอดมิน');
+      result.output = `ส่ง ${ch.toUpperCase()} ถึง ${targetLabel}`;
+      result.effects.push({ kind: 'message', channel: ch, target: cfg.target, targetLabel, text });
       result.forks = single({});
       break;
     }

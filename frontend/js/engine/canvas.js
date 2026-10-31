@@ -1,6 +1,45 @@
 // ---------------------------------------------------------
 // 8. RENDER CANVAS
 // ---------------------------------------------------------
+const ROUTE_COLORS = ['emerald', 'amber', 'rose', 'sky', 'purple', 'cyan'];
+let canvasErrorNodeIds = new Set();
+
+function setCanvasErrorNodes(nodeIds) {
+  canvasErrorNodeIds = new Set(nodeIds || []);
+  renderCanvas();
+}
+
+function clearCanvasErrorNodes() {
+  if (canvasErrorNodeIds.size > 0) {
+    canvasErrorNodeIds.clear();
+    renderCanvas();
+  }
+}
+
+function getNodeOutputs(node, def) {
+  if (node.type === 'logic_switch') {
+    let routes = [];
+    if (Array.isArray(node.config && node.config.routes) && node.config.routes.length > 0) {
+      routes = node.config.routes.map((r, i) => ({
+        id: r.id || `route_${String.fromCharCode(97 + i)}`,
+        label: r.label || `สาย ${String.fromCharCode(65 + i)}`,
+        color: ROUTE_COLORS[i % ROUTE_COLORS.length]
+      }));
+    } else {
+      routes = [
+        { id: 'route_a', label: 'สาย A', color: 'emerald' },
+        { id: 'route_b', label: 'สาย B', color: 'amber' },
+        { id: 'route_c', label: 'สาย C', color: 'rose' }
+      ];
+    }
+    return [
+      ...routes,
+      { id: 'default', label: 'กรณีอื่นๆ (Default)', color: 'slate' }
+    ];
+  }
+  return (def && def.outputs) || [];
+}
+
 function renderCanvas() {
   const nodesLayer = document.getElementById('nodes-layer');
   const emptyHint = document.getElementById('canvas-empty-hint');
@@ -21,17 +60,22 @@ function renderCanvas() {
     const def = BLOCK_CATALOG.find(b => b.type === node.type);
     if (!def) return '';
     const isSelected = node.id === selectedNodeId;
+    const hasError = canvasErrorNodeIds.has(node.id);
     const summaryText = getNodeSummaryPreview(node, def);
     const varStatus = evaluateNodeVariableStatus(node, def);
+    const nodeOutputs = getNodeOutputs(node, def);
+    const minHeight = Math.max(130, nodeOutputs.length * 36);
+
+    let borderClass = 'border-slate-700/90';
+    if (isSelected) borderClass = 'selected border-indigo-500';
+    if (hasError) borderClass = 'border-rose-500 ring-4 ring-rose-500/60 shadow-2xl shadow-rose-500/50 animate-pulse';
 
     return `
       <div id="node-el-${node.id}"
-           style="left: ${node.x}px; top: ${node.y}px; width: 250px;"
+           style="left: ${node.x}px; top: ${node.y}px; width: 250px; min-height: ${minHeight}px;"
            onmousedown="onNodeMouseDown(event, ${node.id})"
            onclick="onNodeClick(event, ${node.id})"
-           class="workflow-node pointer-events-auto absolute bg-slate-900/95 backdrop-blur rounded-2xl border ${
-             isSelected ? 'selected border-indigo-500' : 'border-slate-700/90'
-           } shadow-xl">
+           class="workflow-node pointer-events-auto absolute bg-slate-900/95 backdrop-blur rounded-2xl border ${borderClass} shadow-xl">
 
         <!-- Header -->
         <div class="px-3 py-2 rounded-t-2xl bg-gradient-to-r ${headerColors[def.color]} border-b border-slate-800 flex items-center justify-between gap-1.5">
@@ -41,7 +85,7 @@ function renderCanvas() {
               <div class="text-[10px] font-bold uppercase tracking-wider opacity-75">#${node.id} • ${def.badge}${
                 lastRun && lastRun.visited[node.id] ? ` <span class="ml-1 px-1.5 rounded bg-emerald-500/30 text-emerald-200">▶ ลำดับ ${lastRun.visited[node.id]}</span>` : ''
               }</div>
-              <div class="text-xs font-bold text-white truncate">${def.title}</div>
+              <div class="text-xs font-bold text-white truncate">${def.cleanTitle || def.title}</div>
             </div>
           </div>
           <div class="flex items-center gap-0.5 shrink-0">
@@ -55,6 +99,13 @@ function renderCanvas() {
             </button>
           </div>
         </div>
+
+        ${hasError ? `
+          <div class="bg-rose-950/80 border-b border-rose-500/40 px-2.5 py-1 text-[10px] font-bold text-rose-300 flex items-center gap-1.5">
+            <span class="animate-bounce">⚠️</span>
+            <span>บล็อกนี้มีปัญหา ตรวจสอบการเชื่อมต่อหรือตัวแปร</span>
+          </div>
+        ` : ''}
 
         <!-- Body -->
         <div class="p-3 text-[11px] text-slate-300 space-y-1.5">
@@ -84,32 +135,34 @@ function renderCanvas() {
         `).join('')}
 
         <!-- Output Ports -->
-        ${def.outputs.map((out, idx) => {
-          const total = def.outputs.length;
-          let topStyle = 'top: 50%; transform: translateY(-50%);';
-          if (total === 2) {
-            topStyle = idx === 0 ? 'top: 34%; transform: translateY(-50%);' : 'top: 72%; transform: translateY(-50%);';
-          } else if (total === 3) {
-            topStyle = idx === 0 ? 'top: 26%; transform: translateY(-50%);' : (idx === 1 ? 'top: 54%; transform: translateY(-50%);' : 'top: 82%; transform: translateY(-50%);');
-          }
+        ${(() => {
+          const total = nodeOutputs.length;
+          return nodeOutputs.map((out, idx) => {
+            const pct = total === 1 ? 50 : ((idx + 1) / (total + 1)) * 100;
+            const topStyle = `top: ${pct.toFixed(1)}%; transform: translateY(-50%);`;
 
-          let dotColor = 'bg-indigo-500';
-          let labelColor = 'text-indigo-300';
-          if (out.color === 'emerald') { dotColor = 'bg-emerald-500'; labelColor = 'text-emerald-300'; }
-          if (out.color === 'rose') { dotColor = 'bg-rose-500'; labelColor = 'text-rose-300'; }
-          if (out.color === 'amber') { dotColor = 'bg-amber-400'; labelColor = 'text-amber-300'; }
+            let dotColor = 'bg-indigo-500';
+            let labelColor = 'text-indigo-300';
+            if (out.color === 'emerald') { dotColor = 'bg-emerald-500'; labelColor = 'text-emerald-300'; }
+            if (out.color === 'rose') { dotColor = 'bg-rose-500'; labelColor = 'text-rose-300'; }
+            if (out.color === 'amber') { dotColor = 'bg-amber-400'; labelColor = 'text-amber-300'; }
+            if (out.color === 'sky') { dotColor = 'bg-sky-500'; labelColor = 'text-sky-300'; }
+            if (out.color === 'purple') { dotColor = 'bg-purple-500'; labelColor = 'text-purple-300'; }
+            if (out.color === 'cyan') { dotColor = 'bg-cyan-500'; labelColor = 'text-cyan-300'; }
+            if (out.color === 'slate') { dotColor = 'bg-slate-500'; labelColor = 'text-slate-300'; }
 
-          return `
-            <div style="${topStyle}" class="absolute -right-2.5 flex items-center">
-              ${total > 1 ? `<span class="mr-2 text-[9px] font-bold ${labelColor} bg-slate-950/95 px-1.5 py-0.5 rounded border border-slate-800 shadow">${out.label}</span>` : ''}
-              <div id="port-${node.id}-${out.id}"
-                   onmousedown="onOutputPortMouseDown(event, ${node.id}, '${out.id}')"
-                   title="คลิกเพื่อลากสายเชื่อม (${out.label})"
-                   class="port-dot ${dotColor} border-2 border-slate-900">
+            return `
+              <div style="${topStyle}" class="absolute -right-2.5 flex items-center">
+                ${total > 1 ? `<span class="mr-2 text-[9px] font-bold ${labelColor} bg-slate-950/95 px-1.5 py-0.5 rounded border border-slate-800 shadow">${out.label}</span>` : ''}
+                <div id="port-${node.id}-${out.id}"
+                     onmousedown="onOutputPortMouseDown(event, ${node.id}, '${out.id}')"
+                     title="คลิกเพื่อลากสายเชื่อม (${out.label})"
+                     class="port-dot ${dotColor} border-2 border-slate-900">
+                </div>
               </div>
-            </div>
-          `;
-        }).join('')}
+            `;
+          }).join('');
+        })()}
       </div>
     `;
   }).join('');
@@ -154,20 +207,40 @@ function getNodeSummaryPreview(node, def) {
   switch (node.type) {
     case 'trigger_form': return `ฟอร์ม: "${c.formName || '-'}"`;
     case 'trigger_schedule': return `รัน: ${c.frequency === 'daily' ? 'ทุกวัน' : c.frequency} เวลา ${c.time || '08:00'} น.`;
-    case 'trigger_chat': return `รับแชทจาก: ${c.channel || 'LINE OA'} (${c.eventType})`;
+    case 'trigger_chat': return `รับแชทจาก: ${c.channel || 'LINE OA'} (${c.eventType || 'message'})`;
     case 'trigger_webhook': return `Webhook [${c.method || 'POST'}] จาก: ${c.sourceSystem || '-'}`;
-    case 'logic_if': return `ถ้า ${c.leftValue || '?'} ${c.operator || '=='} ${c.rightValue || '?'}`;
-    case 'logic_switch': return `แยกสายด้วย ${c.switchField}: A=${c.caseA} | B=${c.caseB}`;
+    case 'logic_if': {
+      if (Array.isArray(c.conditions) && c.conditions.length > 1) {
+        const preview = c.conditions.slice(0, 2).map(cond => `${cond.leftValue || '?'} ${cond.operator || '=='} ${cond.rightValue || '?'}`).join(` ${c.conditionLogic || 'AND'} `);
+        return `ถ้า (${preview}${c.conditions.length > 2 ? ' ...' : ''})`;
+      }
+      return `ถ้า ${c.leftValue || '?'} ${c.operator || '=='} ${c.rightValue || '?'}`;
+    }
+    case 'logic_switch': {
+      const routes = Array.isArray(c.routes) && c.routes.length > 0
+        ? c.routes
+        : [{ condition: c.caseA }, { condition: c.caseB }, { condition: c.caseC }].filter(r => r.condition);
+      const preview = routes.slice(0, 3).map((r, i) => `${String.fromCharCode(65 + i)}=${r.condition || '-'}`).join(' | ');
+      return `แยกสายด้วย ${c.switchField || '?'}: ${preview}${routes.length > 3 ? ` (+${routes.length - 3})` : ''}`;
+    }
     case 'logic_loop': return `วนลูปข้อมูล: ${c.sourceList || '{{sheet_rows}}'}`;
     case 'logic_delay': return `หน่วงเวลารอ: ${c.duration || '15 นาที'}`;
     case 'ai_agent': return `Prompt: "${(c.prompt || '').substring(0, 62)}${(c.prompt || '').length > 62 ? '...' : ''}"`;
     case 'data_formatter': return `รูปแบบ: "${(c.template || '').substring(0, 60)}"`;
     case 'action_http': return `${c.method || 'GET'} ${c.endpoint || ''}`;
-    case 'action_sheets': return `[${c.operation === 'append_row' ? 'บันทึก' : 'ดึงข้อมูล'}] ชีต "${c.sheetName || '-'}" ➔ ${c.columns || ''}`;
-    case 'action_line': return `ส่ง [${c.target}]: "${(c.messageTemplate || '').substring(0, 60)}"`;
-    case 'action_telegram': return `${c.platform}: "${(c.message || '').substring(0, 55)}"`;
+    case 'action_sheets': {
+      const chMap = { google_sheets: 'Sheets', excel_365: 'Excel', lark_base: 'Lark', airtable: 'Airtable' };
+      const ch = chMap[c.channel] || 'Spreadsheet';
+      return `[${ch} / ${c.operation === 'read_rows' ? 'ดึง' : 'บันทึก'}] "${c.sheetName || '-'}" ➔ ${c.columns || ''}`;
+    }
+    case 'action_line': {
+      const chMap = { line: 'LINE', telegram: 'Telegram', wechat: 'WeChat', slack: 'Slack', discord: 'Discord' };
+      const ch = chMap[c.channel] || 'Notification';
+      return `[${ch}] ${c.target ? `➔ ${c.target}: ` : ''}"${(c.messageTemplate || '').substring(0, 50)}"`;
+    }
+    case 'action_telegram': return `${c.platform || 'Bot'}: "${(c.message || '').substring(0, 55)}"`;
     case 'action_email': return `ถึง: ${c.toEmail || '-'} | ${c.subject || '-'}`;
-    case 'action_calendar': return `นัดหมาย: ${c.eventTitle || '-'}`;
+    case 'action_calendar': return `นัดหมาย [${c.provider === 'outlook_calendar' ? 'Outlook' : 'Google'}]: ${c.eventTitle || '-'}`;
     default: return 'ตั้งค่าเรียบร้อย';
   }
 }
@@ -207,6 +280,18 @@ function renderConnections() {
     } else if (conn.fromPort === 'route_b' || conn.fromPort === 'done') {
       strokeColor = '#fbbf24';
       marker = 'url(#arrow-route)';
+    } else if (conn.fromPort === 'route_d') {
+      strokeColor = '#38bdf8';
+      marker = 'url(#arrow-route)';
+    } else if (conn.fromPort === 'route_e') {
+      strokeColor = '#c084fc';
+      marker = 'url(#arrow-route)';
+    } else if (conn.fromPort === 'route_f') {
+      strokeColor = '#22d3ee';
+      marker = 'url(#arrow-route)';
+    } else if (conn.fromPort === 'default') {
+      strokeColor = '#94a3b8';
+      marker = 'url(#arrow-default)';
     }
 
     return `

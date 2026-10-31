@@ -25,6 +25,9 @@ function onNodeMouseDown(e, nodeId) {
 
 function onNodeClick(e, nodeId) {
   e.stopPropagation();
+  if (typeof canvasErrorNodeIds !== 'undefined' && canvasErrorNodeIds.has(nodeId)) {
+    canvasErrorNodeIds.delete(nodeId);
+  }
   if (selectedNodeId !== nodeId) {
     selectedNodeId = nodeId;
     const node = nodes.find(n => n.id === nodeId);

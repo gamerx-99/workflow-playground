@@ -298,6 +298,16 @@ async function saveCustomLevelToApp() {
 
 function exportCustomLevelAsJsonFile() {
   const levelObj = buildCustomLevelObjectFromForm();
+  const validator = typeof validateFlowForExport !== 'undefined' ? validateFlowForExport : null;
+  if (validator && levelObj.template) {
+    const res = validator(levelObj.template, BLOCK_CATALOG);
+    if (!res.valid) {
+      const errList = res.checks.filter(c => !c.ok).map(c => `• ${c.label}: ${c.detail}`).join('\n');
+      alert(`⚠️ ไม่สามารถส่งออกไฟล์ด่าน (.json) ได้ เนื่องจากโฟลว์เฉลยยังไม่ผ่านเกณฑ์การตรวจสอบ:\n\n${errList}\n\nกรุณาแก้ไขโฟลว์ให้ผ่านการตรวจสอบก่อนครับ`);
+      return;
+    }
+  }
+
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(levelObj, null, 2));
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', dataStr);
@@ -320,13 +330,85 @@ function openExportFlowModal() {
     connections,
     nextNodeId
   };
-  const json = JSON.stringify(flow, null, 2);
+
+  const validator = typeof validateFlowForExport !== 'undefined' ? validateFlowForExport : null;
+  const validation = validator ? validator(flow, BLOCK_CATALOG) : { valid: true, passedCount: 5, totalCount: 5, checks: [], errorNodeIds: [] };
+
   const modal = document.getElementById('flow-import-export-modal');
   document.getElementById('flow-io-title').textContent = '📤 ส่งออก Flow (JSON)';
-  document.getElementById('flow-io-desc').textContent = 'คัดลอกข้อความ JSON ด้านล่าง หรือกดปุ่มดาวน์โหลดเป็นไฟล์ .json';
-  document.getElementById('flow-io-textarea').value = json;
-  document.getElementById('flow-io-textarea').readOnly = true;
-  document.getElementById('flow-io-download-btn').classList.remove('hidden');
+  document.getElementById('flow-io-desc').textContent = 'ระบบจะตรวจสอบความถูกต้องของโฟลว์ก่อนอนุญาตให้ส่งออกเป็นไฟล์ .json';
+
+  const validationBox = document.getElementById('flow-io-validation-box');
+  const downloadBtn = document.getElementById('flow-io-download-btn');
+  const downloadN8nBtn = document.getElementById('flow-io-download-n8n-btn');
+  const textarea = document.getElementById('flow-io-textarea');
+
+  if (validationBox) {
+    validationBox.classList.remove('hidden');
+    if (validation.valid) {
+      if (typeof clearCanvasErrorNodes === 'function') clearCanvasErrorNodes();
+      validationBox.className = 'p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs space-y-1.5';
+      validationBox.innerHTML = `
+        <div class="flex items-center gap-2">
+          <span class="text-base">✅</span>
+          <div class="font-bold text-emerald-200">ผ่านการตรวจสอบความถูกต้องเรียบร้อยแล้ว (${validation.passedCount}/${validation.totalCount})</div>
+        </div>
+        <div class="text-[11px] text-emerald-300/80 pl-6">โฟลว์มีจุดเริ่มต้น เชื่อมโยงครบถ้วน ตัวแปรถูกต้อง และจำลองการทำงานผ่าน พร้อมส่งออกเป็นไฟล์ .json หรือ n8n Workflow ได้ทันที</div>
+      `;
+      textarea.value = JSON.stringify(flow, null, 2);
+      textarea.readOnly = true;
+      if (downloadBtn) {
+        downloadBtn.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+        downloadBtn.removeAttribute('disabled');
+        downloadBtn.title = 'ดาวน์โหลดไฟล์ .json';
+      }
+      if (downloadN8nBtn) {
+        downloadN8nBtn.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+        downloadN8nBtn.removeAttribute('disabled');
+        downloadN8nBtn.title = 'ดาวน์โหลดไฟล์ n8n Workflow .json';
+      }
+    } else {
+      if (typeof setCanvasErrorNodes === 'function' && Array.isArray(validation.errorNodeIds)) {
+        setCanvasErrorNodes(validation.errorNodeIds);
+      }
+      const failedChecks = validation.checks.filter(c => !c.ok);
+      validationBox.className = 'p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-2';
+      validationBox.innerHTML = `
+        <div class="flex items-center gap-2">
+          <span class="text-base">⚠️</span>
+          <div>
+            <div class="font-bold text-rose-200">ยังไม่ผ่านเกณฑ์การตรวจสอบ (ไม่อนุญาตให้ดาวน์โหลดไฟล์ .json)</div>
+            <div class="text-[11px] text-rose-300/80">ตรวจพบบล็อกที่มีข้อผิดพลาด (ไฮไลต์สีแดงบนกระดาน Canvas):</div>
+          </div>
+        </div>
+        <ul class="space-y-1 pl-6 list-disc text-[11px] text-rose-200">
+          ${failedChecks.map(c => `<li><span class="font-semibold">${escapeHtml(c.label)}:</span> ${escapeHtml(c.detail)}</li>`).join('')}
+        </ul>
+      `;
+      textarea.value = `/* ⚠️ โฟลว์ยังไม่ผ่านการตรวจสอบความถูกต้อง (${validation.passedCount}/${validation.totalCount} ข้อ)\n\nรายการข้อผิดพลาดที่ต้องแก้ไขก่อนส่งออกไฟล์ .json:\n` +
+        failedChecks.map(c => `• ${c.label}: ${c.detail}`).join('\n') +
+        `\n\n(บล็อกที่มีปัญหาถูกไฮไลต์กรอบสีแดงบนกระดาน Canvas เรียบร้อยแล้ว)\nกรุณาแก้ไขโฟลว์บนกระดานให้สมบูรณ์ แล้วเปิดหน้าต่างส่งออกใหม่อีกครั้งครับ */`;
+      textarea.readOnly = true;
+      if (downloadBtn) {
+        downloadBtn.classList.remove('hidden');
+        downloadBtn.classList.add('opacity-50', 'pointer-events-none');
+        downloadBtn.setAttribute('disabled', 'true');
+        downloadBtn.title = 'กรุณาแก้ไขโฟลว์ให้ผ่านการตรวจสอบก่อนดาวน์โหลด';
+      }
+      if (downloadN8nBtn) {
+        downloadN8nBtn.classList.remove('hidden');
+        downloadN8nBtn.classList.add('opacity-50', 'pointer-events-none');
+        downloadN8nBtn.setAttribute('disabled', 'true');
+        downloadN8nBtn.title = 'กรุณาแก้ไขโฟลว์ให้ผ่านการตรวจสอบก่อนดาวน์โหลด';
+      }
+    }
+  } else {
+    textarea.value = JSON.stringify(flow, null, 2);
+    textarea.readOnly = true;
+    if (downloadBtn) downloadBtn.classList.remove('hidden');
+    if (downloadN8nBtn) downloadN8nBtn.classList.remove('hidden');
+  }
+
   document.getElementById('flow-io-apply-btn').classList.add('hidden');
   modal.classList.remove('hidden');
 }
@@ -335,6 +417,8 @@ function openImportFlowModal() {
   const modal = document.getElementById('flow-import-export-modal');
   document.getElementById('flow-io-title').textContent = '📥 นำเข้า Flow (JSON)';
   document.getElementById('flow-io-desc').textContent = 'วางข้อความ JSON หรือเลือกไฟล์ .json จากคอมพิวเตอร์ของคุณเพื่อนำขึ้นกระดาน';
+  const validationBox = document.getElementById('flow-io-validation-box');
+  if (validationBox) validationBox.classList.add('hidden');
   document.getElementById('flow-io-textarea').value = '';
   document.getElementById('flow-io-textarea').readOnly = false;
   document.getElementById('flow-io-download-btn').classList.add('hidden');
@@ -347,11 +431,67 @@ function closeFlowIoModal() {
 }
 
 function downloadExportedFlowFile() {
+  const flow = {
+    name: currentStudioProject ? currentStudioProject.name : 'Flow Export',
+    version: 1,
+    nodes,
+    connections,
+    nextNodeId
+  };
+  const validator = typeof validateFlowForExport !== 'undefined' ? validateFlowForExport : null;
+  if (validator) {
+    const validation = validator(flow, BLOCK_CATALOG);
+    if (!validation.valid) {
+      const failedChecks = validation.checks.filter(c => !c.ok);
+      alert('⚠️ ไม่สามารถดาวน์โหลดไฟล์ .json ได้ เนื่องจากโฟลว์ยังไม่ผ่านการตรวจสอบ:\n\n' +
+        failedChecks.map(c => `• ${c.label}: ${c.detail}`).join('\n') +
+        '\n\nกรุณาแก้ไขโฟลว์ให้สมบูรณ์ก่อนดาวน์โหลดครับ');
+      return;
+    }
+  }
+
   const json = document.getElementById('flow-io-textarea').value;
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(json);
   const a = document.createElement('a');
   a.setAttribute('href', dataStr);
   a.setAttribute('download', `${(currentStudioProject ? currentStudioProject.name : 'flow').replace(/[^a-zA-Z0-9ก-๙]/g, '_')}.json`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function downloadExportedN8nFile() {
+  const flow = {
+    name: currentStudioProject ? currentStudioProject.name : 'Flow Export',
+    version: 1,
+    nodes,
+    connections,
+    nextNodeId
+  };
+  const validator = typeof validateFlowForExport !== 'undefined' ? validateFlowForExport : null;
+  if (validator) {
+    const validation = validator(flow, BLOCK_CATALOG);
+    if (!validation.valid) {
+      const failedChecks = validation.checks.filter(c => !c.ok);
+      alert('⚠️ ไม่สามารถดาวน์โหลด n8n Workflow ได้ เนื่องจากโฟลว์ยังไม่ผ่านการตรวจสอบ:\n\n' +
+        failedChecks.map(c => `• ${c.label}: ${c.detail}`).join('\n') +
+        '\n\nกรุณาแก้ไขโฟลว์ให้สมบูรณ์ก่อนดาวน์โหลดครับ');
+      return;
+    }
+  }
+
+  const converter = typeof convertToN8nWorkflow !== 'undefined' ? convertToN8nWorkflow : null;
+  if (!converter) {
+    alert('ไม่พบตัวแปลง n8n adapter ในระบบ');
+    return;
+  }
+
+  const projName = currentStudioProject ? currentStudioProject.name : 'My Workflow';
+  const n8nJson = converter(flow, BLOCK_CATALOG, projName);
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(n8nJson, null, 2));
+  const a = document.createElement('a');
+  a.setAttribute('href', dataStr);
+  a.setAttribute('download', `n8n_${projName.replace(/[^a-zA-Z0-9ก-๙]/g, '_')}.json`);
   document.body.appendChild(a);
   a.click();
   a.remove();

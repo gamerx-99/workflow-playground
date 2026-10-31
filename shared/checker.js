@@ -120,7 +120,14 @@ function varsIn(value) {
 function portLabel(type, portId, catalog) {
   const def = catalog.find(b => b.type === type);
   const port = def && def.outputs.find(o => o.id === portId);
-  return port ? port.label : portId;
+  if (port) return port.label;
+  if (portId && portId.startsWith('route_')) {
+    return `สาย ${portId.slice(6).toUpperCase()}`;
+  }
+  if (portId === 'default') {
+    return 'กรณีอื่นๆ (Default)';
+  }
+  return portId;
 }
 
 // ไล่หาบล็อกทั้งหมดที่อยู่ "ก่อนหน้า" nodeId ตามทิศทางของเส้นเชื่อม
@@ -147,8 +154,8 @@ const CHECK_RUNNERS = {
     const title = blockTitle(check.block, ctx.catalog);
     return {
       ok: count >= min,
-      label: min > 1 ? `มีบล็อก [${title}] อย่างน้อย ${min} ตัว` : `มีบล็อก [${title}]`,
-      detail: count >= min ? `พบ ${count} ตัว` : `ตอนนี้มี ${count} ตัว — ลากบล็อกนี้จากคลังด้านซ้ายมาวางเพิ่ม`
+      label: min > 1 ? `มีบล็อก [${title}] อย่างน้อย ${min} ตัว ในระบบ` : `มีบล็อก [${title}] ในระบบ`,
+      detail: count >= min ? `พบ ${count} ตัว (ครบตามเกณฑ์)` : `พบ ${count} ตัว (ยังไม่ครบตามเกณฑ์ที่กำหนด)`
     };
   },
 
@@ -164,16 +171,16 @@ const CHECK_RUNNERS = {
     });
     return {
       ok,
-      label: `ต่อสายจาก [${fromTitle}]${portText} ➔ [${toTitle}]`,
-      detail: ok ? 'ต่อสายถูกต้อง' : `ลากสายจากจุด Output ของ [${fromTitle}]${portText} ไปคลิกจุด Input ของ [${toTitle}]`
+      label: `การเชื่อมต่อเส้นทางข้อมูล: [${fromTitle}]${portText} ➔ [${toTitle}]`,
+      detail: ok ? 'เชื่อมต่อสายข้อมูลเรียบร้อย' : 'ยังไม่พบการเชื่อมโยงสายข้อมูลตามเส้นทางนี้'
     };
   },
 
   vars(check, ctx) {
     const title = blockTitle(check.block, ctx.catalog);
     const candidates = nodesOfType(ctx, check.block);
-    const label = `บล็อก [${title}] ช่อง "${check.field}" ใช้ตัวแปร ${check.vars.join(', ')}`;
-    if (candidates.length === 0) return { ok: false, label, detail: 'ยังไม่มีบล็อกนี้บนกระดาน' };
+    const label = `การส่งต่อและใช้งานตัวแปร (${check.vars.join(', ')}) ใน [${title}]`;
+    if (candidates.length === 0) return { ok: false, label, detail: 'ไม่พบบล็อกเป้าหมายบนกระดาน' };
 
     const evaluated = candidates
       .map(n => ({ node: n, missing: check.vars.filter(v => !varsIn(n.config && n.config[check.field]).includes(v)) }))
@@ -183,21 +190,21 @@ const CHECK_RUNNERS = {
     return {
       ok: worst.missing.length === 0,
       label: check.all ? `${label} (ทุกบล็อก)` : label,
-      detail: worst.missing.length === 0 ? 'ใส่ตัวแปรครบแล้ว' : `ยังขาด ${worst.missing.join(', ')} (บล็อก #${worst.node.id})`
+      detail: worst.missing.length === 0 ? 'ระบุตัวแปรครบถ้วนตามเกณฑ์' : `ยังไม่พบการระบุตัวแปร ${worst.missing.join(', ')} ในบล็อก #${worst.node.id}`
     };
   },
 
   value(check, ctx) {
     const title = blockTitle(check.block, ctx.catalog);
     const candidates = nodesOfType(ctx, check.block);
-    const label = `บล็อก [${title}] ช่อง "${check.field}" เป็น ${check.oneOf.map(v => `"${v}"`).join(' หรือ ')}`;
-    if (candidates.length === 0) return { ok: false, label, detail: 'ยังไม่มีบล็อกนี้บนกระดาน' };
+    const label = `การกำหนดค่า "${check.field}" ใน [${title}] ให้เป็นไปตามเงื่อนไข`;
+    if (candidates.length === 0) return { ok: false, label, detail: 'ไม่พบบล็อกเป้าหมายบนกระดาน' };
 
     // ตัวเลขเทียบแบบไม่สนลูกน้ำ (1,000 = 1000)
     const norm = s => String(s == null ? '' : s).trim().replace(/^(\d[\d,]*)$/, m => m.replace(/,/g, ''));
     const hit = candidates.find(n => check.oneOf.map(norm).includes(norm(n.config && n.config[check.field])));
     const current = candidates.map(n => `#${n.id}: "${(n.config && n.config[check.field]) || ''}"`).join(', ');
-    return { ok: !!hit, label, detail: hit ? 'ตั้งค่าถูกต้อง' : `ค่าปัจจุบัน ${current}` };
+    return { ok: !!hit, label, detail: hit ? 'กำหนดค่าถูกต้องตามเงื่อนไข' : `ค่าปัจจุบัน (${current}) ยังไม่ตรงตามเงื่อนไขที่กำหนด` };
   },
 
   distinct(check, ctx) {
@@ -206,16 +213,16 @@ const CHECK_RUNNERS = {
     const ok = values.length > 1 && new Set(values).size === values.length;
     return {
       ok,
-      label: `บล็อก [${title}] แต่ละตัวตั้งค่า "${check.field}" ไม่ซ้ำกัน`,
-      detail: ok ? 'ตั้งชื่อแยกกันเรียบร้อย' : `ค่าปัจจุบัน: ${values.map(v => `"${v}"`).join(', ') || '-'}`
+      label: `บล็อก [${title}] แต่ละตัวต้องกำหนดค่า "${check.field}" ไม่ซ้ำกัน`,
+      detail: ok ? 'กำหนดค่าแยกกันเรียบร้อย' : `พบการตั้งค่าซ้ำซ้อน: ${values.map(v => `"${v}"`).join(', ') || '-'}`
     };
   },
 
   minBlocks(check, ctx) {
     return {
       ok: ctx.nodes.length >= check.min,
-      label: `มีบล็อกบนกระดานอย่างน้อย ${check.min} ตัว`,
-      detail: `ตอนนี้มี ${ctx.nodes.length} ตัว`
+      label: `จำนวนบล็อกบนกระดานอย่างน้อย ${check.min} บล็อก`,
+      detail: `ปัจจุบันมี ${ctx.nodes.length} บล็อก ${ctx.nodes.length >= check.min ? '(ครบตามเกณฑ์)' : '(ยังไม่ครบตามเกณฑ์)'}`
     };
   },
 
@@ -229,8 +236,8 @@ const CHECK_RUNNERS = {
     );
     return {
       ok: ctx.nodes.length > 0 && orphans.length === 0,
-      label: 'ทุกบล็อกต่อสายมาจากจุดเริ่มต้น (ไม่มีบล็อกลอย)',
-      detail: orphans.length === 0 ? 'ทุกบล็อกอยู่ในสายงาน' : `บล็อกที่ยังไม่ได้ต่อสายจาก Trigger: ${orphans.map(n => `#${n.id}`).join(', ')}`
+      label: 'ความต่อเนื่องของโฟลว์ (ทุกบล็อกต้องเชื่อมต่อจากจุดเริ่มต้น Trigger)',
+      detail: orphans.length === 0 ? 'ทุกบล็อกเชื่อมต่อในสายงานอย่างสมบูรณ์' : `พบบล็อกที่ยังไม่มีเส้นทางข้อมูลเชื่อมต่อจาก Trigger: ${orphans.map(n => `#${n.id}`).join(', ')}`
     };
   },
 
@@ -246,12 +253,12 @@ const CHECK_RUNNERS = {
       });
       const used = new Set(Object.values(n.config || {}).flatMap(varsIn));
       const missing = [...used].filter(v => !available.has(v));
-      if (missing.length) problems.push(`#${n.id} ใช้ ${missing.join(', ')} แต่ไม่มีบล็อกก่อนหน้าส่งตัวแปรนี้มา`);
+      if (missing.length) problems.push(`#${n.id} อ้างอิง ${missing.join(', ')} โดยไม่มีบล็อกต้นทางส่งข้อมูลนี้มา`);
     });
     return {
       ok: problems.length === 0,
-      label: 'ตัวแปรทุกตัวที่ใช้ มาจากบล็อกก่อนหน้าในสายเดียวกัน',
-      detail: problems.length === 0 ? 'การส่งต่อตัวแปรถูกต้องทั้งหมด' : problems.join(' • ')
+      label: 'ขอบเขตความพร้อมใช้งานของตัวแปร (ตัวแปรต้องถูกสร้างก่อนนำไปใช้)',
+      detail: problems.length === 0 ? 'ตัวแปรทั้งหมดถูกส่งต่อมาจากบล็อกต้นทางอย่างถูกต้อง' : problems.join(' • ')
     };
   }
 };
@@ -297,4 +304,124 @@ function checkPrediction(level, answers, catalog) {
   return { passed: items.length > 0 && score === items.length, score, total: items.length, items };
 }
 
-if (typeof module !== 'undefined') module.exports = { checkFlow, checkPrediction, correctOptionIndex, deriveChecks, levelHint, CHECK_RUNNERS };
+// ---------------------------------------------------------
+// ตัวตรวจสอบความถูกต้องก่อนอนุญาตให้ส่งออกเป็นไฟล์ .json (Validation Gate)
+// ---------------------------------------------------------
+function validateFlowForExport(flow, catalog) {
+  const nodes = (flow && flow.nodes) || [];
+  const connections = (flow && flow.connections) || [];
+  const ctx = { nodes, connections, catalog };
+  const simulate = typeof simulateFlow !== 'undefined' ? simulateFlow : require('./simulator.js').simulateFlow;
+
+  const checks = [];
+
+  // 1. Min nodes
+  const hasNodes = nodes.length > 0;
+  checks.push({
+    id: 'min_nodes',
+    label: 'มีบล็อกบนกระดานอย่างน้อย 1 บล็อก',
+    ok: hasNodes,
+    detail: hasNodes ? `พบบล็อกจำนวน ${nodes.length} บล็อก` : 'ยังไม่มีบล็อกบนกระดาน (กระดานว่างเปล่า)'
+  });
+
+  // 2. Has trigger
+  const triggers = nodes.filter(n => n.type && n.type.startsWith('trigger_'));
+  const hasTrigger = triggers.length > 0;
+  checks.push({
+    id: 'has_trigger',
+    label: 'มีจุดเริ่มต้นการทำงาน (Trigger)',
+    ok: hasTrigger,
+    detail: hasTrigger ? `พบจุดเริ่มต้น ${triggers.length} บล็อก (${triggers.map(t => `#${t.id}`).join(', ')})` : 'ต้องมีบล็อกหมวด Trigger อย่างน้อย 1 บล็อกเพื่อเป็นจุดเริ่มต้นของโฟลว์'
+  });
+
+  const errorNodeIds = new Set();
+
+  // 3. Reachability
+  const reachRes = CHECK_RUNNERS.reachable({}, ctx);
+  if (!reachRes.ok) {
+    // หา orphan nodes
+    const orphans = ctx.nodes.filter(n =>
+      !n.type.startsWith('trigger_') &&
+      ![...upstreamNodeIds(ctx, n.id)].some(id => {
+        const up = ctx.nodes.find(x => x.id === id);
+        return up && up.type.startsWith('trigger_');
+      })
+    );
+    orphans.forEach(n => errorNodeIds.add(n.id));
+  }
+  checks.push({
+    id: 'reachable',
+    label: 'ความต่อเนื่องของสายข้อมูล (ทุกบล็อกเชื่อมโยงจาก Trigger)',
+    ok: reachRes.ok,
+    detail: reachRes.detail
+  });
+
+  // 4. Upstream variables
+  const varRes = CHECK_RUNNERS.upstreamVars({}, ctx);
+  if (!varRes.ok) {
+    ctx.nodes.forEach(n => {
+      if (n.type.startsWith('trigger_')) return;
+      const available = new Set();
+      upstreamNodeIds(ctx, n.id).forEach(id => {
+        const up = ctx.nodes.find(x => x.id === id);
+        const def = up && ctx.catalog.find(b => b.type === up.type);
+        if (def) def.producedVars.forEach(v => available.add(v));
+      });
+      const used = new Set(Object.values(n.config || {}).flatMap(varsIn));
+      const missing = [...used].filter(v => !available.has(v));
+      if (missing.length) errorNodeIds.add(n.id);
+    });
+  }
+  checks.push({
+    id: 'upstream_vars',
+    label: 'ความถูกต้องของตัวแปร (มีบล็อกต้นทางส่งมาจริง)',
+    ok: varRes.ok,
+    detail: varRes.detail
+  });
+
+  // 5. Simulation execution
+  let simOk = false;
+  let simDetail = '';
+  if (hasNodes && hasTrigger) {
+    try {
+      const sim = simulate(flow, catalog);
+      const isLoopTimeout = sim.warnings && sim.warnings.some(w => w.includes('300'));
+      if (!sim.ok) {
+        simOk = false;
+        simDetail = 'การจำลองล้มเหลว: ไม่สามารถเริ่มการทำงานได้';
+      } else if (isLoopTimeout) {
+        simOk = false;
+        simDetail = 'พบความผิดพลาด: โฟลว์รันเกิน 300 ขั้นตอน (อาจมีสายวนลูปไม่รู้จบ)';
+      } else {
+        simOk = true;
+        simDetail = `รันจำลองสำเร็จ (${sim.steps.length} ขั้นตอน, ผลิตข้อความ ${sim.outcome.messages.length} รายการ, ตาราง ${sim.outcome.sheets.length} รายการ)`;
+      }
+    } catch (err) {
+      simOk = false;
+      simDetail = `เกิดข้อผิดพลาดในการรันจำลอง: ${err.message}`;
+    }
+  } else {
+    simOk = false;
+    simDetail = 'ยังไม่สามารถจำลองได้เนื่องจากยังไม่มี Trigger หรือบล็อกบนกระดาน';
+  }
+
+  checks.push({
+    id: 'simulation',
+    label: 'การจำลองการทำงานจริง (Simulation Execution)',
+    ok: simOk,
+    detail: simDetail
+  });
+
+  const passedCount = checks.filter(c => c.ok).length;
+  const valid = checks.length > 0 && passedCount === checks.length;
+
+  return {
+    valid,
+    passedCount,
+    totalCount: checks.length,
+    checks,
+    errorNodeIds: Array.from(errorNodeIds)
+  };
+}
+
+if (typeof module !== 'undefined') module.exports = { checkFlow, checkPrediction, correctOptionIndex, deriveChecks, levelHint, validateFlowForExport, CHECK_RUNNERS };

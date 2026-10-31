@@ -400,6 +400,7 @@
       </div>
 
       <div class="p-5 space-y-3">
+        <div id="flow-io-validation-box" class="hidden"></div>
         <textarea id="flow-io-textarea" rows="11" class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-xs font-mono-code text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
         
         <div class="flex items-center justify-between text-xs text-slate-400">
@@ -416,7 +417,10 @@
         </button>
         <div class="flex items-center gap-2">
           <button id="flow-io-download-btn" onclick="downloadExportedFlowFile()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
-            <span>💾 ดาวน์โหลดไฟล์ .json</span>
+            <span>💾 ดาวน์โหลด Flow (.json)</span>
+          </button>
+          <button id="flow-io-download-n8n-btn" onclick="downloadExportedN8nFile()" class="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer" title="ส่งออกเป็น n8n Workflow JSON นำเข้า n8n ได้ทันที">
+            <span>🚀 n8n Workflow (.json)</span>
           </button>
           <button id="flow-io-apply-btn" onclick="applyImportedFlow()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
             <span>⚡ โหลดขึ้นกระดาน</span>
@@ -633,9 +637,14 @@
         <button onclick="closeExportModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer">
           ปิดหน้าต่าง
         </button>
-        <button onclick="copyExportText()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer">
-          <span>📋 คัดลอกข้อความส่งตรวจ</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="exportSolutionJson()" title="ส่งออกไฟล์ .json (เฉพาะเมื่อผ่านการประเมินแล้ว)" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+            <span>💾 ส่งออกคำตอบ (.json)</span>
+          </button>
+          <button onclick="copyExportText()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer">
+            <span>📋 คัดลอกข้อความส่งตรวจ</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -864,6 +873,7 @@
   <script src="../shared/simulator.js"></script>
   <script src="../shared/checker.js"></script>
   <script src="../shared/sanitize.js"></script>
+  <script src="../shared/n8n_adapter.js"></script>
   <!-- frontend -->
   <!-- ตรึงเวอร์ชัน + SRI: หน้านี้จัดการล็อกอิน จึงไม่ควรโหลดสคริปต์ลอยตามเวอร์ชัน (@2) ที่เปลี่ยนเองได้ — ถ้าจะอัปเดต ต้องคำนวณ integrity ใหม่ -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>

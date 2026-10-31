@@ -88,9 +88,9 @@ function showCheckResult(result) {
       <span class="text-2xl">${result.passed ? '🎉' : '🧐'}</span>
       <div>
         <h2 class="font-bold text-base ${result.passed ? 'text-emerald-300' : 'text-white'}">
-          ${result.passed ? 'ผ่านด่านนี้แล้ว!' : 'ยังไม่ผ่าน — เหลืออีกนิดเดียว'}
+          ${result.passed ? 'ผ่านการประเมินแล้ว' : 'ยังไม่ผ่านเกณฑ์การประเมิน'}
         </h2>
-        <p class="text-xs text-slate-400">ผ่าน ${result.score} จาก ${result.total} ข้อ</p>
+        <p class="text-xs text-slate-400">ผ่าน ${result.score} จาก ${result.total} เกณฑ์ทดสอบ</p>
       </div>
     </div>
     <button onclick="closeLevelCheckModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold cursor-pointer">✕</button>
@@ -272,4 +272,30 @@ function copyExportText() {
     document.execCommand('copy');
     document.getElementById('copy-success-msg').classList.remove('hidden');
   });
+}
+
+function exportSolutionJson() {
+  const levelObj = LEVELS.find(l => l.id === currentLevelId);
+  const evalRes = (typeof checkFlow !== 'undefined' && levelObj) ? checkFlow(levelObj, { nodes, connections }, BLOCK_CATALOG) : null;
+  const isPassed = (evalRes && evalRes.passed) || (lastRun && lastRun.evalResult && lastRun.evalResult.passed);
+
+  if (!isPassed) {
+    alert('⚠️ ต้องตรวจคำตอบและผ่านเกณฑ์การประเมินด่านนี้ให้เรียบร้อยก่อน จึงจะสามารถส่งออกไฟล์คำตอบ (.json) ได้ครับ');
+    return;
+  }
+
+  const solution = {
+    levelId: currentLevelId,
+    levelTitle: levelObj ? levelObj.title : 'Solution',
+    completedAt: new Date().toISOString(),
+    nodes,
+    connections
+  };
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(solution, null, 2));
+  const a = document.createElement('a');
+  a.setAttribute('href', dataStr);
+  a.setAttribute('download', `solution_level_${currentLevelId}.json`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
