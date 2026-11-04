@@ -66,14 +66,26 @@ function renderCanvas() {
     const nodeOutputs = getNodeOutputs(node, def);
     const minHeight = Math.max(130, nodeOutputs.length * 36);
 
+    const isWireSource = activeWire && activeWire.fromNode === node.id;
+    const isWireTargetCandidate = activeWire && activeWire.fromNode !== node.id && def.inputs && def.inputs.length > 0;
+    const isWireDisabled = activeWire && (!def.inputs || def.inputs.length === 0);
+
     let borderClass = 'border-slate-700/90';
     if (isSelected) borderClass = 'selected border-indigo-500';
     if (hasError) borderClass = 'border-rose-500 ring-4 ring-rose-500/60 shadow-2xl shadow-rose-500/50 animate-pulse';
+    if (isWireSource) {
+      borderClass = 'wire-source';
+    } else if (isWireTargetCandidate) {
+      borderClass = 'wire-target-candidate';
+    } else if (isWireDisabled) {
+      borderClass = 'border-slate-800/60 opacity-60';
+    }
 
     return `
       <div id="node-el-${node.id}"
            style="left: ${node.x}px; top: ${node.y}px; width: 250px; min-height: ${minHeight}px;"
            onmousedown="onNodeMouseDown(event, ${node.id})"
+           ontouchstart="onNodeTouchStart(event, ${node.id})"
            onclick="onNodeClick(event, ${node.id})"
            class="workflow-node pointer-events-auto absolute bg-slate-900/95 backdrop-blur rounded-2xl border ${borderClass} shadow-xl">
 
@@ -89,6 +101,12 @@ function renderCanvas() {
             </div>
           </div>
           <div class="flex items-center gap-0.5 shrink-0">
+            ${nodeOutputs.length > 0 ? `
+              <button type="button" onclick="startWiringFromNode(${node.id}, null, event)" title="ต่อสายเชื่อมไปยังบล็อกอื่น (หรือแตะบล็อกนี้แล้วแตะบล็อกเป้าหมาย)"
+                class="w-6 h-6 rounded hover:bg-indigo-600/30 text-indigo-300 hover:text-white flex items-center justify-center text-xs transition cursor-pointer">
+                🔗
+              </button>
+            ` : ''}
             <button onclick="duplicateNode(${node.id}, event)" title="ทำซ้ำบล็อกนี้"
               class="w-5 h-5 rounded hover:bg-slate-800 text-slate-400 hover:text-indigo-300 flex items-center justify-center text-[11px] transition cursor-pointer">
               ⧉
@@ -99,6 +117,19 @@ function renderCanvas() {
             </button>
           </div>
         </div>
+
+        ${isWireSource ? `
+          <div class="bg-emerald-950/90 border-b border-emerald-500/50 px-2.5 py-1 text-[10px] font-bold text-emerald-300 flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> <span>กำลังส่งสายออก</span></span>
+            <span class="text-[9px] bg-emerald-500/20 px-1 rounded border border-emerald-500/30">ต้นทาง</span>
+          </div>
+        ` : ''}
+        ${isWireTargetCandidate ? `
+          <div class="bg-indigo-950/90 border-b border-indigo-500/50 px-2.5 py-1 text-[10px] font-bold text-indigo-300 flex items-center justify-between">
+            <span>👉 แตะที่นี่เพื่อเชื่อมต่อ</span>
+            <span class="text-xs">⚡</span>
+          </div>
+        ` : ''}
 
         ${hasError ? `
           <div class="bg-rose-950/80 border-b border-rose-500/40 px-2.5 py-1 text-[10px] font-bold text-rose-300 flex items-center gap-1.5">
@@ -128,8 +159,8 @@ function renderCanvas() {
         <!-- Input Port -->
         ${def.inputs.map(inp => `
           <div id="port-${node.id}-${inp.id}"
-               onmousedown="onInputPortClick(event, ${node.id}, '${inp.id}')"
-               title="คลิกเพื่อรับสายเชื่อม (Input)"
+               onpointerdown="onInputPortClick(event, ${node.id}, '${inp.id}')"
+               title="คลิกหรือแตะเพื่อรับสายเชื่อม (Input)"
                class="port-dot absolute -left-2.5 top-1/2 -translate-y-1/2 bg-slate-200 border-2 border-slate-900 flex items-center justify-center">
           </div>
         `).join('')}
@@ -155,8 +186,8 @@ function renderCanvas() {
               <div style="${topStyle}" class="absolute -right-2.5 flex items-center">
                 ${total > 1 ? `<span class="mr-2 text-[9px] font-bold ${labelColor} bg-slate-950/95 px-1.5 py-0.5 rounded border border-slate-800 shadow">${out.label}</span>` : ''}
                 <div id="port-${node.id}-${out.id}"
-                     onmousedown="onOutputPortMouseDown(event, ${node.id}, '${out.id}')"
-                     title="คลิกเพื่อลากสายเชื่อม (${out.label})"
+                     onpointerdown="onOutputPortMouseDown(event, ${node.id}, '${out.id}')"
+                     title="คลิกหรือแตะเพื่อลากสายเชื่อม (${out.label})"
                      class="port-dot ${dotColor} border-2 border-slate-900">
                 </div>
               </div>
